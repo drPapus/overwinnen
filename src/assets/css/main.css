@@ -1,0 +1,299 @@
+html {
+  font-size: 1rem !important;
+}
+
+#header {
+  left: 0;
+  z-index: 10 !important;
+}
+#header .top i {
+  background-color: #f6214b;
+}
+#header .menu li a {
+  transition: color 0.5s;
+  font-size: 0.8rem;
+}
+#header .menu li a:hover {
+  color: #f6214b !important;
+}
+#header .menu .dropdown:hover ul {
+  display: block !important;
+}
+
+#footer h4 {
+  color: #f6214b;
+}
+#footer i {
+  transition: background-color 0.5s;
+  cursor: pointer;
+}
+#footer i:hover {
+  background-color: #f6214b !important;
+}
+
+@media only screen and (max-width: 992px) {
+  #header p {
+    display: none;
+  }
+}
+@media only screen and (max-width: 768px) {
+  #header .top .contact {
+    display: none !important;
+  }
+  #main #home {
+    height: 30rem;
+  }
+  #main #home h2 {
+    font-size: 1.5rem !important;
+  }
+  #main #index input {
+    margin-bottom: 1rem;
+  }
+}
+@media only screen and (max-width: 576px) {
+  h2 {
+    font-size: 1rem !important;
+  }
+  #header ul {
+    gap: 0 !important;
+  }
+  #header ul li {
+    padding: 0 0.2rem !important;
+  }
+  #header ul li a {
+    font-size: 0.6rem !important;
+  }
+  #main #home {
+    height: 20rem;
+  }
+  #main #offer {
+    padding: 6rem 0;
+  }
+  #main #offer h5 {
+    font-size: 1rem !important;
+  }
+  #main #schedule table tr td,
+  #main #schedule table tr th {
+    padding: 1rem 0 !important;
+    transform: scale(1) !important;
+  }
+  #footer ul {
+    justify-content: center !important;
+  }
+}
+@media only screen and (max-width: 320px) {
+  h2,
+  p,
+  h6 {
+    font-size: 0.9rem !important;
+  }
+  #header ul li a {
+    font-size: 0.5rem !important;
+  }
+  #header .dropdown ul {
+    right: 0.1rem;
+  }
+  #main #home {
+    height: 20rem;
+  }
+  #main #index {
+    padding: 2rem 0 !important;
+  }
+  #footer {
+    text-align: center !important;
+  }
+}
+main #member, main #home {
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+main #member::after, main #home::after {
+  content: "";
+  position: absolute;
+  background-color: #000;
+  display: block;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  opacity: 0.6;
+  z-index: -1;
+}
+
+main #home {
+  background-image: url(../images/get-started.jpg);
+  margin-top: 10rem;
+  height: 50rem;
+}
+main #home .content {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+main #home .content h2 {
+  font-size: 2rem;
+}
+main #offer {
+  padding: 10rem 0;
+}
+main #offer h2 {
+  transition: color 0.5s;
+  font-size: 2rem;
+}
+main #offer h2:hover {
+  color: #f6214b;
+}
+main #offer .wrapper {
+  cursor: pointer;
+  transition: all 0.8s;
+}
+main #offer .wrapper img {
+  transition: transform 0.5s;
+}
+main #offer .wrapper:hover {
+  box-shadow: 0px 0px 70px 2px #fdd7df;
+  transform: rotateY(180deg);
+}
+main #offer .wrapper:hover img {
+  transform: rotateY(180deg);
+}
+main #offer .wrapper:hover img {
+  transform: scale(1.2), rotateY(180deg);
+}
+main #offer .wrapper:hover h5,
+main #offer .wrapper:hover p {
+  transform: rotateY(180deg);
+}
+main #index {
+  background-color: #393c42;
+  padding: 7rem 0;
+}
+main #index h2 {
+  font-size: 2rem;
+}
+main #index input {
+  background-color: #2e3441;
+}
+main #index input[type=button] {
+  transition: background-color 0.5s;
+  border-radius: 2rem !important;
+}
+main #index input[type=button]:hover {
+  background-color: transparent !important;
+  color: #fff;
+}
+main #course h2 {
+  font-size: 2rem;
+}
+main #course .wrapper {
+  cursor: pointer;
+}
+main #course .wrapper .img img {
+  transition: transform 0.5s, filter 0.7s;
+  filter: blur(0.2rem);
+}
+main #course .wrapper .img h6 {
+  bottom: 0;
+  left: 0.7rem;
+  background-color: #f6214b;
+}
+main #course .wrapper:hover img {
+  transform: scale(1.3);
+  filter: unset;
+}
+main #course .wrapper h6:nth-child(2) {
+  color: #f6214b;
+}
+main #revolutions h4 {
+  color: #f6214b;
+}
+main #revolutions img {
+  transition: transform 0.5s;
+}
+main #revolutions img:hover {
+  transform: scale(1.3);
+}
+main #schedule table tr {
+  cursor: pointer;
+  transition: background-color 0.6s;
+}
+main #schedule table tr td {
+  transition: transform 0.6s;
+}
+main #schedule table tr:hover {
+  background-color: #f6214b !important;
+}
+main #schedule table tr:hover td {
+  color: #fff !important;
+  transform: scale(1.3);
+}
+main #trainer {
+  background-color: #f9f9ff;
+}
+main #trainer h2 {
+  font-size: 2rem;
+}
+main #trainer .wrapper {
+  cursor: pointer;
+}
+main #trainer .wrapper img {
+  transition: border-radius 0.5s;
+}
+main #trainer .wrapper .icons {
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  background-color: #f6214b;
+  opacity: 0;
+  transition: opacity 0.5s, border-radius 0.5s;
+}
+main #trainer .wrapper:hover .icons {
+  opacity: 0.7;
+  border-radius: 2rem;
+}
+main #trainer .wrapper:hover img {
+  border-radius: 2rem;
+}
+main #plan .wrapper {
+  background-color: #f9f9ff;
+  border-top-left-radius: 2rem;
+  border-top-right-radius: 2rem;
+  cursor: pointer;
+}
+main #plan .wrapper p,
+main #plan .wrapper ul,
+main #plan .wrapper li {
+  transition: background-color 0.7s, color 0.7s;
+}
+main #plan .wrapper:hover ul,
+main #plan .wrapper:hover p {
+  background-color: #f6214b;
+}
+main #plan .wrapper:hover li,
+main #plan .wrapper:hover p {
+  color: #fff !important;
+}
+main #logos img {
+  cursor: pointer;
+  filter: grayscale(1);
+  transition: filter 0.5s;
+}
+main #logos img:hover {
+  filter: grayscale(0);
+}
+main #member {
+  background-image: url(../images/footer.jpg);
+  height: 25rem;
+}
+main #member .content {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+main #member .content h2 {
+  font-size: 2rem;
+}
+main #member .content a {
+  border-radius: 2rem;
+}/*# sourceMappingURL=main.css.map */

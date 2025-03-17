@@ -1,0 +1,145 @@
+html {
+  font-size: 1rem !important;
+}
+
+#header {
+  left: 0;
+  z-index: 10 !important;
+}
+#header .top i {
+  background-color: #f6214b;
+}
+#header .menu li a {
+  transition: color 0.5s;
+  font-size: 0.8rem;
+}
+#header .menu li a:hover {
+  color: #f6214b !important;
+}
+#header .menu .dropdown:hover ul {
+  display: block !important;
+}
+
+#footer h4 {
+  color: #f6214b;
+}
+#footer i {
+  transition: background-color 0.5s;
+  cursor: pointer;
+}
+#footer i:hover {
+  background-color: #f6214b !important;
+}
+
+@media only screen and (max-width: 992px) {
+  #header p {
+    display: none;
+  }
+}
+@media only screen and (max-width: 768px) {
+  #header .top .contact {
+    display: none !important;
+  }
+  #main #home {
+    height: 30rem;
+  }
+  #main #home h2 {
+    font-size: 1.5rem !important;
+  }
+}
+@media only screen and (max-width: 576px) {
+  h2,
+  h5 {
+    font-size: 1rem !important;
+  }
+  #header ul {
+    gap: 0 !important;
+  }
+  #header ul li {
+    padding: 0 0.2rem !important;
+  }
+  #header ul li a {
+    font-size: 0.6rem !important;
+  }
+  #main #home {
+    height: 20rem;
+  }
+  #main #offer {
+    padding: 6rem 0;
+  }
+  #footer ul {
+    justify-content: center !important;
+  }
+}
+@media only screen and (max-width: 320px) {
+  #header ul li a {
+    font-size: 0.5rem !important;
+  }
+  #header .dropdown ul {
+    right: 0.1rem;
+  }
+  #main #home {
+    height: 20rem;
+  }
+  #main #home h2,
+  #main #home h6 {
+    font-size: 0.9rem !important;
+  }
+  #footer {
+    text-align: center !important;
+  }
+}
+main #home {
+  background-color: #f6214b;
+  margin-top: 10rem;
+  padding: 10rem 0;
+}
+main #buttons .group-button:nth-child(3) a:nth-child(2):hover {
+  color: #fff !important;
+  background-color: #bb2d3b !important;
+}
+main #buttons .group-button:nth-child(3) a:nth-child(3):hover {
+  color: #fff !important;
+  background-color: #31d2f2 !important;
+}
+main #buttons .group-button:nth-child(3) a:nth-child(4):hover {
+  color: #fff !important;
+  background-color: #0d6efd !important;
+}
+main #buttons .group-button:nth-child(3) a:nth-child(5):hover {
+  color: #fff !important;
+  background-color: #ffca2c !important;
+}
+main #buttons .group-button:nth-child(4) a {
+  border-radius: 2rem !important;
+}
+main #quotes p {
+  border-left: 0.3rem solid #f6214b;
+}
+main #gallery .img {
+  cursor: pointer;
+  overflow: hidden;
+  margin-top: 1.5rem;
+}
+main #gallery .img img {
+  height: 12rem;
+  transition: transform 0.5s;
+}
+main #gallery .img img:hover {
+  transform: scale(1.1);
+}
+main #other li::marker {
+  color: #f6214b;
+}
+main #elements input {
+  outline: none;
+}
+main #aligned,
+main #definition,
+main #quotes,
+main #table,
+main #gallery,
+main #other,
+main #elements {
+  background-color: #f9f9ff;
+}/*# sourceMappingURL=elements.css.map */
