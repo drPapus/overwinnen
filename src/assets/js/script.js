@@ -33,3 +33,5 @@ document.getElementById("trialForm").addEventListener("submit", function(event) 
         document.getElementById("responseMessage").innerHTML = "<div class='alert alert-danger'>⚠️ Failed to send request. Check your internet connection.</div>";
     });
 });
+
+
