@@ -5,7 +5,7 @@ document.getElementById("trialForm").addEventListener("submit", function(event) 
     let phone = document.getElementById("phone").value;
     let message = document.getElementById("message").value || "No additional message";
 
-    fetch("https://myworker.example.workers.dev", { // Replace with your actual Cloudflare Worker URL
+    fetch("https://overwinnen.antonklimovv.workers.dev/", { // Replace with your actual Cloudflare Worker URL
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name, phone: phone, message: message })
