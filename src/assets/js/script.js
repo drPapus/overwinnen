@@ -31,6 +31,3 @@ document.getElementById("trialForm").addEventListener("submit", function(event) 
     });
 });
 
-//      const TELEGRAM_BOT_TOKEN = "8066577405:AAEAmd0wxfXX30KTHKvvn2-QNWPB1afW7Q4"; // Replace with your bot token
-//      const TELEGRAM_CHAT_ID = "1068630342"; // Replace with your chat ID
-//
