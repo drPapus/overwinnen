@@ -173,7 +173,7 @@ main #index h2 {
   font-size: 2rem;
 }
 main #index input {
-  background-color: #2e3441;
+  background-color: #d3d6dd;
 }
 main #index input[type=button] {
   transition: background-color 0.5s;
