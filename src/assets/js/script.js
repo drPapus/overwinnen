@@ -7,7 +7,7 @@ document.getElementById("trialForm").addEventListener("submit", function(event) 
     let message = document.getElementById("message").value || "No additional message";
 
     // Telegram Bot Credentials
-    let botToken = "8066577405:AAGlFtASJysmT9qWAmK0izAzeVKIfUQSCX4"; // Replace with your bot token
+    let botToken = "8066577405:AAGAtZnjgCceYOvBigXbZXYrJYF0xdikm0E"; // Replace with your bot token
     let chatId = "1068630342"; // Replace with your Chat ID
 
     // Message format
