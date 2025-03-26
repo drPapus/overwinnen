@@ -46,7 +46,7 @@ html {
   #main #home h2 {
     font-size: 1.5rem !important;
   }
-  #main #index input {
+  #main #schedule input {
     margin-bottom: 1rem;
   }
 }
@@ -96,7 +96,7 @@ html {
   #main #home {
     height: 20rem;
   }
-  #main #index {
+  #main #schedule {
     padding: 2rem 0 !important;
   }
   #footer {
@@ -165,21 +165,21 @@ main #offer .wrapper:hover h5,
 main #offer .wrapper:hover p {
   transform: rotateY(180deg);
 }
-main #index {
+main #schedule {
   background-color: #393c42;
   padding: 7rem 0;
 }
-main #index h2 {
+main #schedule h2 {
   font-size: 2rem;
 }
-main #index input {
+main #schedule input {
   background-color: #d3d6dd;
 }
-main #index input[type=button] {
+main #schedule input[type=button] {
   transition: background-color 0.5s;
   border-radius: 2rem !important;
 }
-main #index input[type=button]:hover {
+main #schedule input[type=button]:hover {
   background-color: transparent !important;
   color: #fff;
 }
