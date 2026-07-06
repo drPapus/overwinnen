@@ -1,33 +1,36 @@
-document.getElementById("trialForm").addEventListener("submit", function(event) {
-    event.preventDefault();
+const trialForm = document.getElementById("trialForm");
 
-    let name = document.getElementById("name").value.trim();
-    let phone = document.getElementById("phone").value.trim();
-    let message = document.getElementById("message").value.trim() || "No additional message";
+if (trialForm) {
+    trialForm.addEventListener("submit", function(event) {
+        event.preventDefault();
 
-    // ✅ Ensure all fields are filled
-    if (!name || !phone || !message) {
-        alert("❌ Please fill in all fields.");
-        return;
-    }
+        const name = document.getElementById("name").value.trim();
+        const phone = document.getElementById("phone").value.trim();
+        const message = document.getElementById("message").value.trim() || "Geen extra bericht";
+        const responseMessage = document.getElementById("responseMessage");
 
-    fetch("https://overwinnen.antonklimovv.workers.dev/", { // Replace with your actual Worker URL
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name, phone: phone, message: message })
-    })
-    .then(response => response.text())
-    .then(data => {
-        if (data.includes("Message sent")) {
-            document.getElementById("responseMessage").innerHTML = "<div class='alert alert-success'>✅ Request sent! I will contact you soon.</div>";
-            document.getElementById("trialForm").reset();
-        } else {
-            document.getElementById("responseMessage").innerHTML = "<div class='alert alert-danger'>❌ Failed to send request.</div>";
+        if (!name || !phone) {
+            responseMessage.innerHTML = "<div class='alert alert-danger'>Vul je naam en telefoonnummer in.</div>";
+            return;
         }
-    })
-    .catch(error => {
-        console.error("Error:", error);
-        document.getElementById("responseMessage").innerHTML = "<div class='alert alert-danger'>❌ Failed to send request. Check console.</div>";
-    });
-});
 
+        fetch("https://overwinnen.antonklimovv.workers.dev/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name, phone: phone, message: message })
+        })
+            .then(response => response.text())
+            .then(data => {
+                if (data.includes("Message sent")) {
+                    responseMessage.innerHTML = "<div class='alert alert-success'>Aanvraag verstuurd. Ik neem binnenkort contact met je op.</div>";
+                    trialForm.reset();
+                } else {
+                    responseMessage.innerHTML = "<div class='alert alert-danger'>Versturen is niet gelukt. Probeer het opnieuw.</div>";
+                }
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                responseMessage.innerHTML = "<div class='alert alert-danger'>Versturen is niet gelukt. Controleer je verbinding en probeer opnieuw.</div>";
+            });
+    });
+}
