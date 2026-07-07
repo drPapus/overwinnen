@@ -21,6 +21,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
@@ -29,6 +30,7 @@ body {
   background: var(--surface);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.6;
+  overflow-x: clip;
 }
 
 a {
@@ -140,6 +142,88 @@ a {
   font-size: 0.88rem;
 }
 
+.mobile-menu-toggle,
+.mobile-menu {
+  display: none;
+}
+
+.mobile-menu-toggle {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 44px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+}
+
+.mobile-menu-toggle span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.mobile-menu-toggle span + span {
+  margin-top: 4px;
+}
+
+.mobile-menu-toggle[aria-expanded="true"] span:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.mobile-menu-toggle[aria-expanded="true"] span:nth-child(2) {
+  opacity: 0;
+}
+
+.mobile-menu-toggle[aria-expanded="true"] span:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+.mobile-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  left: 0;
+  z-index: 1;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  color: var(--text);
+  background: rgba(7, 17, 31, 0.94);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 24px 58px rgba(0, 0, 0, 0.3);
+}
+
+.mobile-menu a {
+  display: block;
+  padding: 13px 14px;
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.mobile-menu a:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mobile-menu .mobile-menu-cta {
+  margin-top: 4px;
+  color: #05121e;
+  background: var(--accent);
+  text-align: center;
+}
+
 .hero-section {
   position: relative;
   min-height: 100svh;
@@ -169,6 +253,18 @@ a {
   grid-template-columns: minmax(0, 1.06fr) minmax(320px, 0.72fr);
   gap: 56px;
   align-items: center;
+}
+
+.hero-content,
+.section-heading,
+.split-layout > *,
+.feature-card,
+.service-card,
+.process-step,
+.about-card > *,
+.cta-card > *,
+.footer-layout > * {
+  min-width: 0;
 }
 
 .eyebrow {
@@ -632,8 +728,21 @@ a {
 }
 
 @media (max-width: 992px) {
-  .nav-links {
+  .nav-links,
+  .nav-cta {
     display: none;
+  }
+
+  .nav-shell {
+    position: relative;
+  }
+
+  .mobile-menu-toggle {
+    display: flex;
+  }
+
+  .mobile-menu.is-open {
+    display: block;
   }
 
   .hero-layout,
@@ -683,6 +792,10 @@ a {
   .hero-section {
     min-height: auto;
     padding: 122px 0 70px;
+  }
+
+  .hero-content h1 {
+    font-size: clamp(3.2rem, 15vw, 4rem);
   }
 
   .hero-actions {
