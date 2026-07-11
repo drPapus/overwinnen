@@ -25,40 +25,6 @@ if (hero && canvas) {
   renderer.toneMappingExposure = 1.1;
 
   let model = null;
-  const sphereRadius = 3.15;
-  const sphereGeometry = new THREE.SphereGeometry(sphereRadius, 64, 64);
-  const sphereGlassMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.12,
-    transmission: 1,
-    thickness: 0.15,
-    ior: 1.12,
-    roughness: 0.03,
-    metalness: 0,
-    clearcoat: 1,
-    clearcoatRoughness: 0.02,
-    envMapIntensity: 2,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  const sphereGlowMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.03,
-    side: THREE.BackSide,
-    depthWrite: false,
-  });
-  const glassSphereGroup = new THREE.Group();
-  const glassSphere = new THREE.Mesh(sphereGeometry, sphereGlassMaterial);
-  const sphereGlow = new THREE.Mesh(sphereGeometry, sphereGlowMaterial);
-  glassSphere.renderOrder = 1;
-  sphereGlow.renderOrder = 2;
-  sphereGlow.scale.setScalar(1.1);
-  glassSphereGroup.add(glassSphere, sphereGlow);
-  glassSphereGroup.visible = false;
-  scene.add(glassSphereGroup);
-
   const glassMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xdcecff,
     transparent: true,
@@ -88,10 +54,6 @@ if (hero && canvas) {
         const center = bounds.getCenter(new THREE.Vector3());
         model.position.x -= center.x;
         model.position.y -= bounds.min.y;
-
-        bounds.setFromObject(model);
-        bounds.getCenter(glassSphereGroup.position);
-        glassSphereGroup.visible = true;
 
         const exportedMaterials = new Set();
         model.traverse((child) => {
@@ -144,14 +106,11 @@ if (hero && canvas) {
   camera.position.set(-0.2, 0.35, 0.5);
   loadModel();
 
-  function animate(time = 0) {
+  function animate() {
     requestAnimationFrame(animate);
     if (model) {
       model.rotation.y += 0.0005;
     }
-    const breathingScale =
-      1.006 + 0.006 * Math.sin(time * 0.001 - Math.PI / 2);
-    glassSphereGroup.scale.setScalar(breathingScale);
     renderer.render(scene, camera);
   }
 
@@ -176,9 +135,6 @@ if (hero && canvas) {
       });
     }
     glassMaterial.dispose();
-    sphereGeometry.dispose();
-    sphereGlassMaterial.dispose();
-    sphereGlowMaterial.dispose();
     renderer.dispose();
   });
 
