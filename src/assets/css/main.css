@@ -236,6 +236,20 @@ a {
     linear-gradient(135deg, #06101d 0%, #0b1727 52%, #10223a 100%);
 }
 
+#hero-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.hero-section > .container {
+  position: relative;
+  z-index: 1;
+}
+
 .hero-grid {
   position: absolute;
   inset: 0;
@@ -250,7 +264,7 @@ a {
 .hero-layout {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.06fr) minmax(320px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.86fr);
   gap: 56px;
   align-items: center;
 }
@@ -278,7 +292,7 @@ a {
 
 .hero-content h1 {
   margin: 0;
-  font-size: clamp(4rem, 10vw, 8.4rem);
+  font-size: clamp(4rem, 8vw, 5.9rem);
   line-height: 0.9;
   letter-spacing: 0;
 }
@@ -339,64 +353,27 @@ a {
   box-shadow: var(--shadow);
 }
 
-.orbit {
+.hero-logo-wrap {
   position: relative;
-  display: grid;
-  width: min(100%, 350px);
-  aspect-ratio: 1;
-  margin: 0 auto 24px;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, rgba(32, 211, 230, 0.18) 0 19%, transparent 20%),
-    conic-gradient(from 80deg, rgba(32, 211, 230, 0.8), rgba(255, 255, 255, 0.08), rgba(71, 137, 255, 0.5), rgba(32, 211, 230, 0.8));
+  display: flex;
+  justify-content: center;
+  width: min(100%, 500px);
+  margin: -4px auto 24px;
+  padding: 18px 34px;
+  border-radius: 24px;
+  background: radial-gradient(circle at 50% 42%, rgba(32, 211, 230, 0.12), transparent 62%);
+  filter:
+    drop-shadow(0 0 18px rgba(32, 211, 230, 0.22))
+    drop-shadow(0 24px 42px rgba(0, 0, 0, 0.38));
 }
 
-.orbit::before {
-  content: "";
-  position: absolute;
-  inset: 15%;
-  border: 1px dashed rgba(255, 255, 255, 0.24);
-  border-radius: 50%;
-}
-
-.orbit-core {
+.aim-hero-logo {
   position: relative;
   z-index: 1;
-  display: grid;
-  width: 108px;
-  height: 108px;
-  place-items: center;
-  border-radius: 50%;
-  color: #06111d;
-  background: linear-gradient(135deg, #ffffff, #9af6ff);
-  font-size: 1.8rem;
-  font-weight: 900;
-}
-
-.orbit-point {
-  position: absolute;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 24px rgba(32, 211, 230, 0.85);
-}
-
-.point-one {
-  top: 18%;
-  right: 26%;
-}
-
-.point-two {
-  bottom: 22%;
-  right: 15%;
-}
-
-.point-three {
-  bottom: 28%;
-  left: 12%;
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
 }
 
 .hero-metrics {
@@ -784,6 +761,26 @@ a {
   background: var(--accent);
 }
 
+@media (max-width: 1300px) and (min-width: 993px) {
+  .hero-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(480px, 0.8fr);
+    gap: 36px;
+  }
+
+  .hero-content h1 {
+    font-size: clamp(4rem, 7.4vw, 5.45rem);
+  }
+
+  .aim-hero-logo {
+    width: min(100%, 430px);
+  }
+
+  .hero-logo-wrap {
+    width: min(100%, 430px);
+    padding: 14px 28px;
+  }
+}
+
 @media (max-width: 992px) {
   .nav-links,
   .nav-cta {
@@ -810,6 +807,16 @@ a {
 
   .hero-panel {
     max-width: 560px;
+    justify-self: center;
+  }
+
+  .aim-hero-logo {
+    width: 100%;
+  }
+
+  .hero-logo-wrap {
+    width: min(100%, 460px);
+    padding: 18px 34px;
   }
 
   .four-columns,
@@ -878,6 +885,16 @@ a {
   .hero-panel {
     padding: 18px;
     border-radius: 22px;
+  }
+
+  .hero-logo-wrap {
+    width: min(100%, 360px);
+    padding: 12px 8px 0;
+    margin-bottom: 18px;
+  }
+
+  .aim-hero-logo {
+    width: min(100%, 360px);
   }
 
   .hero-metrics div {

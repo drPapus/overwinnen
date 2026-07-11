@@ -84,6 +84,7 @@
 
     <main>
       <section id="home" class="hero-section">
+        <canvas id="hero-canvas"></canvas>
         <div class="hero-grid" aria-hidden="true"></div>
         <div class="container">
           <div class="hero-layout">
@@ -98,28 +99,33 @@
               </div>
             </div>
 
-            <div class="hero-panel" aria-label="AIM Method focusgebieden">
-              <div class="orbit">
-                <span class="orbit-core">AIM</span>
-                <span class="orbit-point point-one"></span>
-                <span class="orbit-point point-two"></span>
-                <span class="orbit-point point-three"></span>
+            <!-- <div class="hero-panel" aria-label="AIM Method focusgebieden">
+              <div class="hero-logo-wrap">
+                <img
+                  class="aim-hero-logo"
+                  src="./src/assets/images/aim-hero-visual.png"
+                  width="1402"
+                  height="1122"
+                  alt="AIM Method visual"
+                  fetchpriority="high"
+                  decoding="async"
+                />
               </div>
               <div class="hero-metrics">
                 <div>
-                  <strong>Analyse</strong>
-                  <span>Bewegingskwaliteit</span>
+                  <strong>Assessment</strong>
+                  <span>Movement Analysis</span>
                 </div>
                 <div>
-                  <strong>Adaptatie</strong>
-                  <span>Progressieve belasting</span>
+                  <strong>Adaptation</strong>
+                  <span>Progressive Loading</span>
                 </div>
                 <div>
-                  <strong>Integratie</strong>
-                  <span>Leven en sport</span>
+                  <strong>Integration</strong>
+                  <span>Life &amp; Sport</span>
                 </div>
               </div>
-            </div>
+            </div> -->
           </div>
         </div>
       </section>
@@ -392,5 +398,13 @@
     </footer>
 
     <script src="./src/assets/js/script.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+        }
+      }
+    </script>
+    <script type="module" src="./js/hero-3d.js"></script>
   </body>
 </html>
