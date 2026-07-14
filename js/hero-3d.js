@@ -256,12 +256,12 @@ if (hero && canvas) {
   const sphereFresnel = new THREE.Mesh(sphereGeometry, sphereFresnelMaterial);
   sphereFresnel.scale.setScalar(1.010);
   glassSphereGroup.add(glassSphere, sphereFresnel);
-  //scene.add(glassSphereGroup);
+  scene.add(glassSphereGroup);
 
   // Give the sphere a static, low-contrast environment without room softboxes.
-  const sphereReflection = createSphereReflectionEnvironment(scene);
-  sphereGlassMaterial.envMap = sphereReflection.renderTarget.texture;
-  sphereGlassMaterial.needsUpdate = true;
+  // const sphereReflection = createSphereReflectionEnvironment(scene);
+  // sphereGlassMaterial.envMap = sphereReflection.renderTarget.texture;
+  // sphereGlassMaterial.needsUpdate = true;
 
   let backgroundTitle = null;
   let titleLoadSettled = false;
@@ -276,8 +276,8 @@ if (hero && canvas) {
 
     if (backgroundTitle) {
       backgroundTitle.mesh.position.set(
-        glassSphereGroup.position.x,
-        glassSphereGroup.position.y + 0.3,
+        glassSphereGroup.position.x - 0.7,
+        glassSphereGroup.position.y + 0.6,
         glassSphereGroup.position.z - 2,
       );
     }
