@@ -230,10 +230,7 @@ a {
   overflow: hidden;
   padding: 156px 0 92px;
   color: var(--text);
-  background:
-    radial-gradient(circle at 78% 18%, rgba(32, 211, 230, 0.22), transparent 32%),
-    radial-gradient(circle at 18% 76%, rgba(65, 120, 255, 0.16), transparent 30%),
-    linear-gradient(135deg, #06101d 0%, #0b1727 52%, #10223a 100%);
+  background-color: #090d14;
 }
 
 #hero-canvas {
@@ -241,24 +238,29 @@ a {
   inset: 0;
   width: 100%;
   height: 100%;
+  display: block;
   z-index: 0;
+  background-color: #090d14;
   pointer-events: none;
 }
 
 .hero-section > .container {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .hero-grid {
   position: absolute;
   inset: 0;
+  z-index: 1;
   opacity: 0.28;
+  background-color: transparent;
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: linear-gradient(to bottom, black, transparent 85%);
+  pointer-events: none;
 }
 
 .hero-layout {
