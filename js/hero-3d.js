@@ -298,10 +298,24 @@ if (hero && canvas) {
   let titleLoadSettled = false;
   let sphereReflectionUpdated = false;
   let isDisposed = false;
+  const initialHeroBounds = hero.getBoundingClientRect();
+  let heroVisible =
+    initialHeroBounds.bottom > 0 && initialHeroBounds.top < window.innerHeight;
+  let documentActive = !document.hidden;
+  let windowFocused = true;
+  const pausedHeroAnimations = new Set();
 
   // Capture only after both asynchronous scene objects have their final position.
   function finalizeSphereReflection() {
-    if (!model || !titleLoadSettled || sphereReflectionUpdated || isDisposed) {
+    if (
+      !model ||
+      !titleLoadSettled ||
+      sphereReflectionUpdated ||
+      isDisposed ||
+      !heroVisible ||
+      !documentActive ||
+      !windowFocused
+    ) {
       return;
     }
 
@@ -412,16 +426,64 @@ if (hero && canvas) {
   camera.position.set(-0.2, 0.35, 0.7);
 
   loadModel();
-  const clock = new THREE.Clock();
+  let animationFrameId = null;
+  let lastFrameTime = 0;
+  let activeElapsedTime = 0;
 
-  function animate() {
-    requestAnimationFrame(animate);
-    const sphereScale = 0.75 + Math.sin(clock.getElapsedTime()) * 0.005;
+  function shouldRender() {
+    return heroVisible && documentActive && windowFocused && !isDisposed;
+  }
+
+  function animate(time) {
+    animationFrameId = null;
+    if (!shouldRender()) return;
+
+    const delta = lastFrameTime
+      ? Math.min((time - lastFrameTime) / 1000, 0.1)
+      : 0;
+    lastFrameTime = time;
+    activeElapsedTime += delta;
+    const sphereScale = 0.75 + Math.sin(activeElapsedTime) * 0.005;
     glassSphereGroup.scale.setScalar(sphereScale);
     if (model) {
       model.rotation.y += 0.0005;
     }
     renderer.render(scene, camera);
+    animationFrameId = requestAnimationFrame(animate);
+  }
+
+  function stopRendering() {
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+    cancelAnimationFrame(cardParallaxFrame);
+    cardParallaxFrame = 0;
+    hero.getAnimations({ subtree: true }).forEach((animation) => {
+      if (animation.playState !== "running") return;
+      animation.pause();
+      pausedHeroAnimations.add(animation);
+    });
+    lastFrameTime = 0;
+    canvas.style.visibility = "hidden";
+  }
+
+  function startRendering() {
+    if (!shouldRender() || animationFrameId !== null) return;
+    canvas.style.visibility = "visible";
+    pausedHeroAnimations.forEach((animation) => animation.play());
+    pausedHeroAnimations.clear();
+    finalizeSphereReflection();
+    lastFrameTime = performance.now();
+    animationFrameId = requestAnimationFrame(animate);
+  }
+
+  function syncRendering() {
+    if (shouldRender()) {
+      startRendering();
+    } else {
+      stopRendering();
+    }
   }
 
   function resize() {
@@ -440,10 +502,45 @@ if (hero && canvas) {
     );
   }
 
-  new ResizeObserver(resize).observe(hero);
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(hero);
+
+  const intersectionObserver = new IntersectionObserver(
+    ([entry]) => {
+      heroVisible = entry.isIntersecting;
+      syncRendering();
+    },
+    { threshold: 0 },
+  );
+  intersectionObserver.observe(hero);
+
+  function handleVisibilityChange() {
+    documentActive = !document.hidden;
+    syncRendering();
+  }
+
+  function handleWindowFocus() {
+    windowFocused = true;
+    syncRendering();
+  }
+
+  function handleWindowBlur() {
+    windowFocused = false;
+    syncRendering();
+  }
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  window.addEventListener("focus", handleWindowFocus);
+  window.addEventListener("blur", handleWindowBlur);
 
   window.addEventListener("pagehide", () => {
     isDisposed = true;
+    stopRendering();
+    intersectionObserver.disconnect();
+    resizeObserver.disconnect();
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.removeEventListener("focus", handleWindowFocus);
+    window.removeEventListener("blur", handleWindowBlur);
     if (model) {
       model.traverse((child) => {
         if (!child.isMesh) return;
@@ -479,5 +576,5 @@ if (hero && canvas) {
     renderer.dispose();
   });
 
-  animate();
+  syncRendering();
 }
