@@ -1,9 +1,19 @@
 import * as THREE from "three";
 import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/environments/RoomEnvironment.js";
 
 console.log("[Back Pain Spine] script loaded");
 
 const DEBUG_SPINE_VIEWS = false;
+const SPINE_LIGHTING = {
+  exposure: 0.75,
+  keyIntensity: 3,
+  rimIntensity: 2.2,
+  fillIntensity: 0.4,
+  lowerFillIntensity: 1,
+  envMapIntensity: 1.25,
+  opacity: 0.72,
+};
 
 const canvas = document.querySelector("#backPainCanvas");
 const modelUrl = new URL(
@@ -48,6 +58,17 @@ if (canvas && document.body.classList.contains("page-back-pain")) {
     renderer.debug.checkShaderErrors = true;
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = SPINE_LIGHTING.exposure;
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const roomEnvironment = new RoomEnvironment();
+    const environmentTarget = pmremGenerator.fromScene(roomEnvironment, 0.04);
+    const environmentTexture = environmentTarget.texture;
+    scene.environment = environmentTexture;
+    roomEnvironment.dispose();
+    pmremGenerator.dispose();
 
     const spineLayoutGroup = new THREE.Group();
     const spineRotationGroup = new THREE.Group();
@@ -133,24 +154,46 @@ if (canvas && document.body.classList.contains("page-back-pain")) {
     let targetModelScale = 1;
     let currentModelScale = 1;
 
-    const spineMaterial = new THREE.MeshStandardMaterial({
-      color: 0x244457,
-      roughness: 0.55,
-      metalness: 0.05,
+    const spineMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x151b22,
+      roughness: 0.2,
+      metalness: 0.72,
+      clearcoat: 0.55,
+      clearcoatRoughness: 0.18,
       transparent: true,
       opacity: 0,
       depthWrite: true,
+      depthTest: true,
+      side: THREE.FrontSide,
+      envMapIntensity: SPINE_LIGHTING.envMapIntensity,
     });
-    const targetOpacity = 0.42;
+    const targetOpacity = SPINE_LIGHTING.opacity;
     let currentOpacity = 0;
     let spineLoaded = false;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.1);
-    const directionalLight = new THREE.DirectionalLight(0x77e7ff, 2.2);
-    const rimLight = new THREE.DirectionalLight(0x66d9ef, 1.2);
-    directionalLight.position.set(3, 4, 5);
-    rimLight.position.set(-4, 2, -3);
-    scene.add(ambientLight, directionalLight, rimLight);
+    const keyLight = new THREE.DirectionalLight(
+      0xd9f7ff,
+      SPINE_LIGHTING.keyIntensity,
+    );
+    const rimLight = new THREE.DirectionalLight(
+      0x55d8ee,
+      SPINE_LIGHTING.rimIntensity,
+    );
+    const fillLight = new THREE.HemisphereLight(
+      0xa9eaff,
+      0x050a10,
+      SPINE_LIGHTING.fillIntensity,
+    );
+    const lowerFillLight = new THREE.PointLight(
+      0x4faec2,
+      SPINE_LIGHTING.lowerFillIntensity,
+      14,
+      2,
+    );
+    keyLight.position.set(4, 5, 6);
+    rimLight.position.set(-4, 2, -5);
+    lowerFillLight.position.set(2, -3, 3);
+    scene.add(keyLight, rimLight, fillLight, lowerFillLight);
 
     function hierarchyName(object, root) {
       const names = [];
@@ -177,6 +220,12 @@ if (canvas && document.body.classList.contains("page-back-pain")) {
           console.log("[Back Pain Spine] mesh:", meshPath || child.name);
           child.castShadow = false;
           child.receiveShadow = false;
+          if (
+            child.geometry?.attributes?.position &&
+            !child.geometry.attributes.normal
+          ) {
+            child.geometry.computeVertexNormals();
+          }
           const materials = Array.isArray(child.material)
             ? child.material
             : [child.material];
@@ -388,16 +437,27 @@ if (canvas && document.body.classList.contains("page-back-pain")) {
     function resize() {
       const width = window.innerWidth;
       const height = window.innerHeight;
+      const lightMultiplier = width < 768 ? 0.78 : width <= 1024 ? 0.9 : 1;
 
       camera.aspect = width / Math.max(height, 1);
       camera.updateProjectionMatrix();
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.setPixelRatio(
+        Math.min(window.devicePixelRatio || 1, width < 768 ? 1 : 1.5),
+      );
       renderer.setSize(width, height, false);
+      keyLight.intensity = SPINE_LIGHTING.keyIntensity * lightMultiplier;
+      rimLight.intensity = SPINE_LIGHTING.rimIntensity * lightMultiplier;
+      fillLight.intensity = SPINE_LIGHTING.fillIntensity * lightMultiplier;
+      lowerFillLight.intensity =
+        SPINE_LIGHTING.lowerFillIntensity * lightMultiplier;
+      spineMaterial.envMapIntensity =
+        SPINE_LIGHTING.envMapIntensity * (width < 768 ? 0.68 : lightMultiplier);
       collectSpineViewSections();
       updateViewTargets();
     }
 
     const clock = new THREE.Clock();
+    let animationFrame = 0;
 
     function animate() {
       const elapsedTime = clock.getElapsedTime();
@@ -431,21 +491,33 @@ if (canvas && document.body.classList.contains("page-back-pain")) {
 
         const responsiveOpacity =
           window.innerWidth < 768
-            ? 0.28
+            ? 0.48
             : window.innerWidth <= 1024
-              ? 0.36
+              ? 0.62
               : targetOpacity;
         currentOpacity += (responsiveOpacity - currentOpacity) * 0.05;
         spineMaterial.opacity = currentOpacity;
       }
 
       renderer.render(scene, camera);
-      requestAnimationFrame(animate);
+      animationFrame = requestAnimationFrame(animate);
     }
 
     function handleScroll() {
       lastScrollTime = performance.now();
       updateViewTargets();
+    }
+
+    function destroy() {
+      cancelAnimationFrame(animationFrame);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", resize);
+      reduceMotionQuery.removeEventListener("change", updateViewTargets);
+      scene.environment = null;
+      environmentTexture.dispose();
+      environmentTarget.dispose();
+      spineMaterial.dispose();
+      renderer.dispose();
     }
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -459,6 +531,7 @@ if (canvas && document.body.classList.contains("page-back-pain")) {
       { once: true },
     );
     reduceMotionQuery.addEventListener("change", updateViewTargets);
+    window.addEventListener("pagehide", destroy, { once: true });
     resize();
     animate();
   }
