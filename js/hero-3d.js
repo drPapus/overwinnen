@@ -218,6 +218,37 @@ function setupSphereLighting(scene) {
 const hero = document.querySelector(".hero-section");
 const canvas = document.querySelector("#hero-canvas");
 
+const cardPositions = document.querySelectorAll(".aim-card-position");
+const cardMotionQuery = window.matchMedia("(min-width: 721px) and (prefers-reduced-motion: no-preference)");
+let cardParallaxFrame = 0;
+
+function updateCardParallax(event) {
+  if (!cardMotionQuery.matches || !hero) return;
+
+  const bounds = hero.getBoundingClientRect();
+  const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+  const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+
+  cancelAnimationFrame(cardParallaxFrame);
+  cardParallaxFrame = requestAnimationFrame(() => {
+    cardPositions.forEach((card) => {
+      const depth = Number(card.dataset.parallax || 0.5);
+      card.style.setProperty("--parallax-x", `${(x * depth * 8).toFixed(2)}px`);
+      card.style.setProperty("--parallax-y", `${(y * depth * 8).toFixed(2)}px`);
+    });
+  });
+}
+
+function resetCardParallax() {
+  cardPositions.forEach((card) => {
+    card.style.setProperty("--parallax-x", "0px");
+    card.style.setProperty("--parallax-y", "0px");
+  });
+}
+
+hero?.addEventListener("pointermove", updateCardParallax, { passive: true });
+hero?.addEventListener("pointerleave", resetCardParallax);
+
 if (hero && canvas) {
   const scene = new THREE.Scene();
   scene.background = STUDIO_COLOR;
@@ -276,9 +307,9 @@ if (hero && canvas) {
 
     if (backgroundTitle) {
       backgroundTitle.mesh.position.set(
-        glassSphereGroup.position.x - 0.7,
-        glassSphereGroup.position.y + 0.6,
-        glassSphereGroup.position.z - 2,
+        glassSphereGroup.position.x  + 1.5,
+        glassSphereGroup.position.y + 0.4,
+        glassSphereGroup.position.z - 6,
       );
     }
 
