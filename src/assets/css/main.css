@@ -1078,6 +1078,48 @@ a {
   line-height: 1.25;
 }
 
+.about-credentials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 22px;
+}
+
+.about-credentials span {
+  color: #dfeaf2;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.about-credentials i {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.about-credentials-link {
+  display: inline-flex;
+  margin-top: 22px;
+  align-items: center;
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 800;
+  transition: color 300ms ease, transform 300ms ease;
+}
+
+.about-credentials-link span {
+  margin-left: 7px;
+  transition: transform 300ms ease;
+}
+
+.about-credentials-link:hover {
+  color: #b8f6ff;
+  transform: translate3d(0, -2px, 0);
+}
+
+.about-credentials-link:hover span {
+  transform: translate3d(4px, 0, 0);
+}
+
 .about-cta {
   margin-top: 28px;
 }

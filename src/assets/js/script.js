@@ -3,6 +3,26 @@ const mobileMenuToggle = document.querySelector(".mobile-menu-toggle");
 const mobileMenu = document.getElementById("mobileMenu");
 const aimHero = document.querySelector(".hero-section");
 const aimConnectionSvg = document.querySelector(".aim-connections");
+const credentialsReveal = document.querySelector(".credentials-reveal");
+
+if (credentialsReveal) {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    if (reducedMotion.matches || !("IntersectionObserver" in window)) {
+        credentialsReveal.classList.add("is-visible");
+    } else {
+        credentialsReveal.classList.add("is-reveal-ready");
+        const credentialsObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                entry.target.classList.add("is-visible");
+                observer.unobserve(entry.target);
+            });
+        }, { threshold: 0.16 });
+
+        credentialsObserver.observe(credentialsReveal);
+    }
+}
 
 if (aimHero && aimConnectionSvg) {
     const cards = aimHero.querySelectorAll("[data-aim-card]");
