@@ -4,8 +4,11 @@ import { hipConfig, kneeConfig, neckConfig, shoulderConfig, spineConfig } from "
 const canvas = document.querySelector("#anatomy-canvas");
 const configs = { hip: hipConfig, knee: kneeConfig, neck: neckConfig, shoulder: shoulderConfig, spine: spineConfig };
 const config = canvas ? configs[canvas.dataset.anatomyModel] : null;
+const page = document.body.dataset.pageType === "problem"
+  ? document.body.dataset.problemSlug
+  : null;
 
-if (canvas && config) {
+if (page && canvas && config) {
   const anatomyCanvas = new AnatomyCanvas({ canvas, ...config }).init();
   window.addEventListener("pagehide", () => anatomyCanvas.destroy(), { once: true });
 }

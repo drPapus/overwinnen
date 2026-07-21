@@ -10,61 +10,16 @@
 @media(max-width:520px){.experience-grid,.indicator-grid,.suitable-grid,.level-grid,.related-grid{grid-template-columns:1fr}.related-heading{align-items:flex-start;flex-direction:column}.back-footer .footer-layout{grid-template-columns:1fr}.breadcrumbs{margin-bottom:30px}.back-hero h1{font-size:clamp(4rem,22vw,6rem)}}
 @media(prefers-reduced-motion:reduce){.related-grid a,.anatomy-canvas{transition:none}}
 
-/* Back Pain WebGL test layer */
-.page-back-pain{position:relative;overflow-x:clip;background:#07101a}
+/* Shared Problems page and anatomy layer. */
+.problem-page{position:relative;overflow-x:clip;background:#07101a}
 .anatomy-canvas{position:fixed;z-index:0;inset:0;display:block;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity .45s ease}
 .anatomy-canvas--ready{opacity:1}.anatomy-canvas--error{display:none}
-.page-back-pain .site-header,.page-back-pain main,.page-back-pain .site-footer{position:relative;z-index:1}
-.page-back-pain .back-hero{background:radial-gradient(circle at 76% 45%,rgba(32,211,230,.12),transparent 29%),radial-gradient(circle at 15% 52%,rgba(61,100,146,.18),transparent 35%),rgba(8,13,20,.76)}
-.page-back-pain .back-section{background:rgba(9,15,23,.72)}
-.page-back-pain .back-dark,.page-back-pain .back-process,.page-back-pain .back-faq{background:rgba(6,11,17,.76)}
-.page-back-pain .back-safety{background:rgba(8,17,26,.78)}
-.page-back-pain .back-healthcare{background:rgba(8,19,30,.78)}
-.page-back-pain .back-final{background:rgba(5,10,16,.9)}
-.page-back-pain .related-section{background:rgba(8,13,20,.9)}
-.page-back-pain .back-footer{background:rgba(5,10,15,.94)}
-
-/* Knee Pain reuses the shared pain-model canvas architecture. */
-.page-knee-pain{position:relative;overflow-x:clip;background:#07101a}
-.page-knee-pain .site-header,.page-knee-pain main,.page-knee-pain .site-footer{position:relative;z-index:1}
-.page-knee-pain .back-hero{background:radial-gradient(circle at 76% 45%,rgba(32,211,230,.12),transparent 29%),radial-gradient(circle at 15% 52%,rgba(61,100,146,.18),transparent 35%),rgba(8,13,20,.76)}
-.page-knee-pain .back-section{background:rgba(9,15,23,.72)}
-.page-knee-pain .back-dark,.page-knee-pain .back-process,.page-knee-pain .back-faq{background:rgba(6,11,17,.76)}
-.page-knee-pain .back-safety{background:rgba(8,17,26,.78)}
-.page-knee-pain .back-healthcare{background:rgba(8,19,30,.78)}
-.page-knee-pain .back-final{background:rgba(5,10,16,.9)}
-.page-knee-pain .related-section{background:rgba(8,13,20,.9)}
-.page-knee-pain .back-footer{background:rgba(5,10,15,.94)}
-
-.page-shoulder-pain{position:relative;overflow-x:clip;background:#07101a}
-.page-shoulder-pain .site-header,.page-shoulder-pain main,.page-shoulder-pain .site-footer{position:relative;z-index:1}
-.page-shoulder-pain .back-hero{background:radial-gradient(circle at 76% 45%,rgba(32,211,230,.12),transparent 29%),radial-gradient(circle at 15% 52%,rgba(61,100,146,.18),transparent 35%),rgba(8,13,20,.76)}
-.page-shoulder-pain .back-section{background:rgba(9,15,23,.72)}
-.page-shoulder-pain .back-dark,.page-shoulder-pain .back-process,.page-shoulder-pain .back-faq{background:rgba(6,11,17,.76)}
-.page-shoulder-pain .back-safety{background:rgba(8,17,26,.78)}
-.page-shoulder-pain .back-healthcare{background:rgba(8,19,30,.78)}
-.page-shoulder-pain .back-final{background:rgba(5,10,16,.9)}
-.page-shoulder-pain .related-section{background:rgba(8,13,20,.9)}
-.page-shoulder-pain .back-footer{background:rgba(5,10,15,.94)}
-
-.page-neck-pain{position:relative;overflow-x:clip;background:#07101a}
-.page-neck-pain .site-header,.page-neck-pain main,.page-neck-pain .site-footer{position:relative;z-index:1}
-.page-neck-pain .back-hero{background:radial-gradient(circle at 76% 45%,rgba(32,211,230,.12),transparent 29%),radial-gradient(circle at 15% 52%,rgba(61,100,146,.18),transparent 35%),rgba(8,13,20,.76)}
-.page-neck-pain .back-section{background:rgba(9,15,23,.72)}
-.page-neck-pain .back-dark,.page-neck-pain .back-process,.page-neck-pain .back-faq{background:rgba(6,11,17,.76)}
-.page-neck-pain .back-safety{background:rgba(8,17,26,.78)}
-.page-neck-pain .back-healthcare{background:rgba(8,19,30,.78)}
-.page-neck-pain .back-final{background:rgba(5,10,16,.9)}
-.page-neck-pain .related-section{background:rgba(8,13,20,.9)}
-.page-neck-pain .back-footer{background:rgba(5,10,15,.94)}
-
-.page-hip-pain{position:relative;overflow-x:clip;background:#07101a}
-.page-hip-pain .site-header,.page-hip-pain main,.page-hip-pain .site-footer{position:relative;z-index:1}
-.page-hip-pain .back-hero{background:radial-gradient(circle at 76% 45%,rgba(32,211,230,.12),transparent 29%),radial-gradient(circle at 15% 52%,rgba(61,100,146,.18),transparent 35%),rgba(8,13,20,.76)}
-.page-hip-pain .back-section{background:rgba(9,15,23,.72)}
-.page-hip-pain .back-dark,.page-hip-pain .back-process,.page-hip-pain .back-faq{background:rgba(6,11,17,.76)}
-.page-hip-pain .back-safety{background:rgba(8,17,26,.78)}
-.page-hip-pain .back-healthcare{background:rgba(8,19,30,.78)}
-.page-hip-pain .back-final{background:rgba(5,10,16,.9)}
-.page-hip-pain .related-section{background:rgba(8,13,20,.9)}
-.page-hip-pain .back-footer{background:rgba(5,10,15,.94)}
+.problem-page .site-header,.problem-page main,.problem-page .site-footer{position:relative;z-index:1}
+.problem-page .back-hero{background:radial-gradient(circle at 76% 45%,rgba(32,211,230,.12),transparent 29%),radial-gradient(circle at 15% 52%,rgba(61,100,146,.18),transparent 35%),rgba(8,13,20,.76)}
+.problem-page .back-section{background:rgba(9,15,23,.72)}
+.problem-page .back-dark,.problem-page .back-process,.problem-page .back-faq{background:rgba(6,11,17,.76)}
+.problem-page .back-safety{background:rgba(8,17,26,.78)}
+.problem-page .back-healthcare{background:rgba(8,19,30,.78)}
+.problem-page .back-final{background:rgba(5,10,16,.9)}
+.problem-page .related-section{background:rgba(8,13,20,.9)}
+.problem-page .back-footer{background:rgba(5,10,15,.94)}
