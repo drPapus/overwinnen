@@ -2,6 +2,17 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshSurfaceSampler } from "three/addons/math/MeshSurfaceSampler.js";
 
+const DEVELOPMENT_LOGS =
+  typeof location !== "undefined" &&
+  (
+    location.hostname === "localhost" ||
+    location.hostname === "127.0.0.1" ||
+    new URLSearchParams(location.search).has("aimDebug")
+  );
+const debugLog = (...args) => {
+  if (DEVELOPMENT_LOGS) console.info(...args);
+};
+
 const INSTANCE_COUNT = 4096;
 const POSITION_TEXTURE_SIZE = 64;
 const DEFAULT_SIMULATION = {
@@ -1984,6 +1995,9 @@ export class BlockSurfaceHuman {
     this.particleCollisionRebuildEveryNFrames = 1;
     this.particleCollisionSubsteps = 1;
     this._particleCollisionFrame = 0;
+    this._simulationPassesCurrentFrame = 0;
+    this._simulationPassesLastFrame = 0;
+    this._scaleSettleElapsed = 0;
     this._particleVoxelDataValid = false;
     this.predictedPositionTarget = null;
     this.predictedVelocityTarget = null;
@@ -2379,7 +2393,7 @@ export class BlockSurfaceHuman {
     importedMaterials.forEach((material) => {
       if (!retainedImportedMaterials.has(material)) material.dispose();
     });
-    console.info("[BlockSurfaceHuman] Inner crystal initialized", {
+    debugLog("[BlockSurfaceHuman] Inner crystal initialized", {
       bodyMeshes: this.sourceMeshes.map(
         (mesh) => mesh.name || "unnamed",
       ),
@@ -2443,9 +2457,9 @@ export class BlockSurfaceHuman {
     this.humanVisibleMeshes = [...this.sourceMeshes];
     this.humanRaycastMeshes = [...this.sourceMeshes];
     this.pointerRaycastMeshes = this.humanRaycastMeshes;
-    console.info("[BlockSurfaceHuman] Valid meshes:", entries.length);
+    debugLog("[BlockSurfaceHuman] Valid meshes:", entries.length);
     entries.forEach(({ mesh, count }, index) => {
-      console.info(
+      debugLog(
         `[BlockSurfaceHuman] Mesh ${index + 1} (${mesh.name || "unnamed"}):`,
         count,
       );
@@ -2587,8 +2601,8 @@ export class BlockSurfaceHuman {
     this.scene.add(this.instancedMesh);
     this.configureInnerGlassMaterial();
     this.attachPointerListeners();
-    console.info("[BlockSurfaceHuman] Instances created:", instanceIndex);
-    console.info(
+    debugLog("[BlockSurfaceHuman] Instances created:", instanceIndex);
+    debugLog(
       "[BlockSurfaceHuman] Stage 8 pointer interaction initialized",
       {
         raycastTarget: "original-human-mesh",
@@ -2598,7 +2612,7 @@ export class BlockSurfaceHuman {
         cpuParticleUpdates: false,
       },
     );
-    console.info(
+    debugLog(
       "[ParticleBodyEffect] localized pointer activity enabled",
       {
         activitySource: "real 3D raycast hit",
@@ -2608,7 +2622,7 @@ export class BlockSurfaceHuman {
         activityTexture: false,
       },
     );
-    console.info("[BlockSurfaceHuman] infinity flow initialized", {
+    debugLog("[BlockSurfaceHuman] infinity flow initialized", {
       center: "real 3D raycast hit",
       plane: "surface tangent basis",
       formulation: "implicit Bernoulli lemniscate",
@@ -2616,7 +2630,7 @@ export class BlockSurfaceHuman {
       activityRadius: this.localizedActivityConfig.radius,
       gpuOnly: true,
     });
-    console.info(
+    debugLog(
       "[BlockSurfaceHuman] Stage 10 AIM material initialized",
       {
         material: this.material.type,
@@ -2765,7 +2779,7 @@ export class BlockSurfaceHuman {
         this.positionData[instanceIndex * 4 + 2],
       ),
     }));
-    console.info("[BlockSurfaceHuman] SDF surface validation:", {
+    debugLog("[BlockSurfaceHuman] SDF surface validation:", {
       signConvention: "negative-inside-positive-outside",
       boundsMin: this.sdfMetadata.boundsMin,
       boundsMax: this.sdfMetadata.boundsMax,
@@ -2894,7 +2908,7 @@ export class BlockSurfaceHuman {
     }
     this._collisionAbortController = null;
     if (this.debugCollision) {
-      console.info("[BlockSurfaceHuman] GPU collision initialized", {
+      debugLog("[BlockSurfaceHuman] GPU collision initialized", {
         collisionTexture: "3D float SDF",
         resolution: resolution.join("x"),
         positionalCorrection: true,
@@ -3262,7 +3276,7 @@ export class BlockSurfaceHuman {
     this.voxelRangeMesh.frustumCulled = false;
     this.voxelRangeScene.add(this.voxelRangeMesh);
 
-    console.info(
+    debugLog(
       "[BlockSurfaceHuman] Stage 9 particle collisions initialized",
       {
         enabled: this.particleCollisionInfluence > 0,
@@ -3727,7 +3741,7 @@ export class BlockSurfaceHuman {
     this.simulationInitialized = true;
 
     if (this.debugSimulation) {
-      console.info("[BlockSurfaceHuman] GPU simulation initialized", {
+      debugLog("[BlockSurfaceHuman] GPU simulation initialized", {
         resolution: "64x64",
         particles: INSTANCE_COUNT,
         positionTargets: 2,
@@ -3738,7 +3752,7 @@ export class BlockSurfaceHuman {
         sdfResolution: this.sdfMetadata.resolution.join("x"),
       });
     }
-    console.info(
+    debugLog(
       "[BlockSurfaceHuman] Stage 7 orientation initialized",
       {
         method: "vertex-tbn",
@@ -3776,6 +3790,7 @@ export class BlockSurfaceHuman {
   }
 
   renderSimulationPass(material, target) {
+    this._simulationPassesCurrentFrame += 1;
     this.simulationMesh.material = material;
     this.renderer.setRenderTarget(target);
     this.renderer.render(this.simulationScene, this.simulationCamera);
@@ -4164,12 +4179,15 @@ export class BlockSurfaceHuman {
   }
 
   update(deltaTime, elapsedTime) {
+    this._simulationPassesCurrentFrame = 0;
+    this._simulationPassesLastFrame = 0;
     if (
       !this.simulationInitialized ||
       this.disposed ||
       document.hidden
     ) {
       this.clearPointerInteraction();
+      this._simulationPassesLastFrame = 0;
       return;
     }
 
@@ -4249,10 +4267,87 @@ export class BlockSurfaceHuman {
       }
     });
     if (particleCollisionsActive) this._particleCollisionFrame += 1;
-    this.withPreservedRendererState(() => {
-      this.updateParticleScaleState(safeDeltaTime);
-    });
+    const scalePointerActive =
+      this.pointerActive &&
+      this.pointerInteractionEnabled &&
+      this.effectVisible;
+    this._scaleSettleElapsed = scalePointerActive
+      ? 0
+      : this._scaleSettleElapsed + safeDeltaTime;
+    if (scalePointerActive || this._scaleSettleElapsed <= 1) {
+      this.withPreservedRendererState(() => {
+        this.updateParticleScaleState(safeDeltaTime);
+      });
+    }
     this.syncRenderTextures(elapsedTime);
+    this._simulationPassesLastFrame =
+      this._simulationPassesCurrentFrame;
+  }
+
+  getPerformanceReport() {
+    const renderTargets = [
+      this.positionTargetA,
+      this.positionTargetB,
+      this.velocityTargetA,
+      this.velocityTargetB,
+      this.predictedPositionTarget,
+      this.predictedVelocityTarget,
+      this.particleScaleTargetA,
+      this.particleScaleTargetB,
+      this.particleVoxelKeyTarget,
+      this.voxelSortTargetA,
+      this.voxelSortTargetB,
+      this.voxelStartTarget,
+      this.voxelEndTarget,
+      this._particleCollisionPositionStorage,
+      this._particleCollisionVelocityStorage,
+    ]
+      .filter(Boolean)
+      .map((target) => ({
+        name: target.texture.name || "unnamed",
+        width: target.width,
+        height: target.height,
+        format:
+          target.texture.format === THREE.RGBAFormat ? "RGBA" : "other",
+        type:
+          target.texture.type === THREE.FloatType
+            ? "Float32"
+            : target.texture.type === THREE.HalfFloatType
+              ? "Float16"
+              : "other",
+      }));
+    let raycastTargetTriangles = 0;
+    this.pointerRaycastMeshes.forEach((mesh) => {
+      const geometry = mesh.geometry;
+      if (!geometry) return;
+      raycastTargetTriangles += geometry.index
+        ? geometry.index.count / 3
+        : (geometry.getAttribute("position")?.count || 0) / 3;
+    });
+    const renderTargetBytes = renderTargets.reduce(
+      (total, target) =>
+        total +
+        target.width *
+          target.height *
+          4 *
+          (target.type === "Float32" ? 4 : 2),
+      0,
+    );
+    return {
+      particleCount: INSTANCE_COUNT,
+      simulationPassesLastFrame: this._simulationPassesLastFrame,
+      particleCollisionsEnabled:
+        this.particleCollisionInfluence > 0 &&
+        Boolean(this.particleCollisionPositionMaterial),
+      renderTargets,
+      approximateTextureMemoryBytes:
+        renderTargetBytes +
+        (this.sdfData?.byteLength || 0) +
+        (this.collisionData?.byteLength || 0),
+      raycastTargetTriangles: Math.round(raycastTargetTriangles),
+      particleMaterial: this.material?.type || null,
+      innerHumanMaterial: this.innerGlassMaterial?.type || null,
+    };
   }
 
   updateParticleScaleState(deltaTime) {
@@ -5677,7 +5772,7 @@ gl_FragColor.rgb = ${pointerDebugColor};`,
   }
 
   logPositionTextureDiagnostics() {
-    console.info("[BlockSurfaceHuman] Position texture:", {
+    debugLog("[BlockSurfaceHuman] Position texture:", {
       width: POSITION_TEXTURE_SIZE,
       height: POSITION_TEXTURE_SIZE,
       texels: INSTANCE_COUNT,
@@ -5690,7 +5785,7 @@ gl_FragColor.rgb = ${pointerDebugColor};`,
         this.positionData[offset + 1],
         this.positionData[offset + 2],
       ];
-      console.info(`[BlockSurfaceHuman] Position ${index}:`, {
+      debugLog(`[BlockSurfaceHuman] Position ${index}:`, {
         cpuSampledPosition: Array.from(
           this._debugSamplePositions.get(index),
         ),

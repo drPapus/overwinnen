@@ -1,6 +1,5 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 import { RoomEnvironment } from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/environments/RoomEnvironment.js";
-import { Reflector } from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/objects/Reflector.js";
 import { BlockSurfaceHuman } from "./three/BlockSurfaceHuman.js";
 import {
   createSphereReflectionEnvironment,
@@ -9,15 +8,79 @@ import {
 } from "../src/environment/sphereReflectionEnvironment.js";
 import { createBackgroundTitle } from "../src/objects/backgroundTitle.js";
 import {
-  createBottomGlowMaterial,
   createContactShadowMaterial,
   createGlassSphereMaterial,
   createSphereFresnelMaterial,
   createStudioBackgroundMaterial,
   createStudioCycloramaMaterial,
-  createStudioFloorMaterial,
   STUDIO_COLOR,
 } from "../src/materials/index.js";
+
+const AIM_QUALITY_PRESETS = {
+  high: {
+    particleCount: 4096,
+    pixelRatioCap: 1.5,
+    // The approved effect already runs without particle-to-particle collisions.
+    particleCollisions: false,
+    collisionGrid: 64,
+    collisionRebuildEvery: 1,
+    simulationSubsteps: 2,
+    scaleTexture: true,
+    physicalMaterial: true,
+    bloom: false,
+  },
+  medium: {
+    particleCount: 4096,
+    pixelRatioCap: 1.25,
+    particleCollisions: false,
+    collisionGrid: 32,
+    collisionRebuildEvery: 2,
+    simulationSubsteps: 1,
+    scaleTexture: true,
+    physicalMaterial: true,
+    bloom: false,
+  },
+  low: {
+    // The current simulation layout remains 64x64 to preserve the approved
+    // distribution. This tier removes optional work before reducing particles.
+    particleCount: 4096,
+    pixelRatioCap: 1,
+    particleCollisions: false,
+    collisionGrid: 32,
+    collisionRebuildEvery: 2,
+    simulationSubsteps: 1,
+    scaleTexture: true,
+    physicalMaterial: false,
+    bloom: false,
+  },
+};
+
+function selectAimQuality(renderer) {
+  const requested = new URLSearchParams(window.location.search).get(
+    "aimQuality",
+  );
+  if (requested && AIM_QUALITY_PRESETS[requested]) return requested;
+
+  const capabilities = renderer.capabilities;
+  const cores = navigator.hardwareConcurrency || 4;
+  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const narrowViewport = window.matchMedia("(max-width: 720px)").matches;
+  if (
+    capabilities.maxTextureSize < 4096 ||
+    cores <= 4 ||
+    (coarsePointer && narrowViewport)
+  ) {
+    return "low";
+  }
+  if (
+    capabilities.maxTextureSize < 8192 ||
+    cores <= 8 ||
+    window.devicePixelRatio > 2
+  ) {
+    return "medium";
+  }
+  return "high";
+}
 
 // Generate a studio-like reflection map procedurally; no external HDR is needed.
 function setupEnvironment(renderer, scene) {
@@ -102,55 +165,6 @@ function createStudioCyclorama() {
   };
 }
 
-// Combine a dim planar reflection with a polished near-black floor surface.
-function createReflectiveFloor(width, height) {
-  const geometry = new THREE.PlaneGeometry(30, 30);
-  const pixelRatio = Math.min(window.devicePixelRatio, 2);
-  const textureWidth = Math.min(Math.round(width * pixelRatio), 2048);
-  const textureHeight = Math.min(Math.round(height * pixelRatio), 2048);
-  const reflector = new Reflector(geometry, {
-    clipBias: 0.003,
-    textureWidth,
-    textureHeight,
-    color: STUDIO_COLOR.getHex(),
-  });
-  reflector.rotation.x = -Math.PI / 2;
-  reflector.position.y = -0.008;
-  reflector.renderOrder = -2;
-
-  const reflectionFade = createRadialTexture(
-    "rgb(205, 205, 205)",
-    "rgb(255, 255, 255)",
-  );
-  reflectionFade.repeat.set(8, 8);
-  reflectionFade.offset.set(-3.5, -3.5);
-  const overlayMaterial = createStudioFloorMaterial(reflectionFade);
-  const overlay = new THREE.Mesh(geometry, overlayMaterial);
-  overlay.rotation.x = -Math.PI / 2;
-  overlay.position.y = -0.006;
-  overlay.renderOrder = -1;
-
-  const group = new THREE.Group();
-  group.add(reflector, overlay);
-
-  return { group, geometry, overlayMaterial, reflectionFade, reflector };
-}
-
-// Keep valid GPU blocks in the main scene while preventing the planar
-// reflection pass from presenting them as detached particles below the floor.
-function excludeObjectFromPlanarReflection(reflector, object) {
-  const renderReflection = reflector.onBeforeRender;
-  reflector.onBeforeRender = function (...args) {
-    const wasVisible = object.visible;
-    object.visible = false;
-    try {
-      renderReflection.apply(this, args);
-    } finally {
-      object.visible = wasVisible;
-    }
-  };
-}
-
 // Generate reusable radial textures without loading image assets.
 function createRadialTexture(innerColor, outerColor) {
   const canvas = document.createElement("canvas");
@@ -172,24 +186,10 @@ function createRadialTexture(innerColor, outerColor) {
 function createContactShadow() {
   const texture = createRadialTexture("rgba(0, 0, 0, 1)", "rgba(0, 0, 0, 0)");
   const material = createContactShadowMaterial(texture);
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.32), material);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.09), material);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = -0.004;
   mesh.renderOrder = 1;
-  return { mesh, texture, material };
-}
-
-// Add a concentrated blue-white glow at the glass/floor contact point.
-function createBottomGlow() {
-  const texture = createRadialTexture(
-    "rgba(205, 233, 255, 1)",
-    "rgba(125, 190, 255, 0)",
-  );
-  const material = createBottomGlowMaterial(texture);
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.1), material);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = -0.002;
-  mesh.renderOrder = 2;
   return { mesh, texture, material };
 }
 
@@ -255,13 +255,21 @@ if (hero && canvas) {
     alpha: true,
     antialias: true,
   });
+  const qualityName = selectAimQuality(renderer);
+  const quality = AIM_QUALITY_PRESETS[qualityName];
+  const developmentMode =
+    location.hostname === "localhost" ||
+    location.hostname === "127.0.0.1" ||
+    new URLSearchParams(location.search).has("aimDebug");
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, quality.pixelRatioCap),
+  );
   renderer.setSize(hero.clientWidth, hero.clientHeight, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.75;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = false;
   // Preserve fine refraction detail in the transmission pass.
   renderer.transmissionResolutionScale = 1;
 
@@ -348,17 +356,10 @@ if (hero && canvas) {
       finalizeSphereReflection();
     });
 
-  const reflectiveFloor = createReflectiveFloor(
-    hero.clientWidth,
-    hero.clientHeight,
-  );
-  scene.add(reflectiveFloor.group);
-
   const contactShadow = createContactShadow();
-  const bottomGlow = createBottomGlow();
-  const floorEffects = new THREE.Group();
-  floorEffects.add(contactShadow.mesh, bottomGlow.mesh);
-  scene.add(floorEffects);
+  const groundingEffects = new THREE.Group();
+  groundingEffects.add(contactShadow.mesh);
+  scene.add(groundingEffects);
 
   function loadModel() {
     const debugParameters = new URLSearchParams(window.location.search);
@@ -374,8 +375,10 @@ if (hero && canvas) {
       collisionMetadataUrl:
         "./src/assets/collision/floor-collision-volume.json",
       particleCollisions: {
+        // Keep the production default off: this avoids the voxel-key, bitonic
+        // sort, range, neighbor-correction, and velocity-correction passes.
         enabled: false,
-        quality: "desktop",
+        quality: qualityName === "high" ? "desktop" : "mobile",
       },
       activityDebugMode:
         debugParameters.get("particleActivityDebug") || "none",
@@ -388,7 +391,7 @@ if (hero && canvas) {
       innerCrystalDebugMode:
         debugParameters.get("innerCrystalDebug") ||
         "crystal+particles",
-      visualQuality: "desktop",
+      visualQuality: quality.physicalMaterial ? "desktop" : "mobile",
       visual: {
         preset: "dark-crystal-metal",
       },
@@ -400,10 +403,10 @@ if (hero && canvas) {
         sourceModel.position.x -= center.x;
         sourceModel.position.y -= bounds.min.y;
         glassSphereGroup.position.set(0, center.y - bounds.min.y, -center.z);
-        floorEffects.position.z = -center.z;
+        groundingEffects.position.z = -center.z;
       },
       onProgress: (event) => {
-        if (!event.lengthComputable) return;
+        if (!developmentMode || !event.lengthComputable) return;
         const progress = Math.round((event.loaded / event.total) * 100);
         console.info(`Loading AIM human model: ${progress}%`);
       },
@@ -413,14 +416,13 @@ if (hero && canvas) {
       .load()
       .then(() => {
         model = blockHuman.sourceRoot;
-        excludeObjectFromPlanarReflection(
-          reflectiveFloor.reflector,
-          blockHuman.instancedMesh,
-        );
         blockHuman.setVisible(heroVisible);
         blockHuman.startSimulation({ autoActivate: true });
         finalizeSphereReflection();
-        console.info("AIM block human model loaded successfully.");
+        if (developmentMode) {
+          console.info("AIM block human model loaded successfully.");
+          console.info("AIM hero performance", getPerformanceReport());
+        }
       })
       .catch((error) => {
         console.error("Failed to load AIM block human model.", error);
@@ -453,6 +455,9 @@ if (hero && canvas) {
   let lastFrameTime = 0;
   let activeElapsedTime = 0;
   let modelRotationY = 0;
+  let frameTimeAverage = 0;
+  let measuredFrameCount = 0;
+  let lastMainRenderCalls = 0;
 
   function shouldRender() {
     return heroVisible && documentActive && windowFocused && !isDisposed;
@@ -463,9 +468,16 @@ if (hero && canvas) {
     if (!shouldRender()) return;
 
     const delta = lastFrameTime
-      ? Math.min((time - lastFrameTime) / 1000, 0.1)
+      ? Math.min((time - lastFrameTime) / 1000, 1 / 30)
       : 0;
     lastFrameTime = time;
+    if (delta > 0) {
+      measuredFrameCount += 1;
+      const frameMilliseconds = delta * 1000;
+      frameTimeAverage +=
+        (frameMilliseconds - frameTimeAverage) /
+        Math.min(measuredFrameCount, 120);
+    }
     activeElapsedTime += delta;
     const sphereScale = 0.75 + Math.sin(activeElapsedTime) * 0.005;
     glassSphereGroup.scale.setScalar(sphereScale);
@@ -473,6 +485,7 @@ if (hero && canvas) {
     blockHuman?.setRotationY(modelRotationY);
     blockHuman?.update(delta, activeElapsedTime);
     renderer.render(scene, camera);
+    lastMainRenderCalls = renderer.info.render.calls;
     animationFrameId = requestAnimationFrame(animate);
   }
 
@@ -489,6 +502,7 @@ if (hero && canvas) {
       pausedHeroAnimations.add(animation);
     });
     lastFrameTime = 0;
+    blockHuman?.clearPointerInteraction();
     canvas.style.visibility = "hidden";
   }
 
@@ -510,21 +524,58 @@ if (hero && canvas) {
     }
   }
 
-  function resize() {
+  let resizeFrameId = 0;
+  function applyResize() {
+    resizeFrameId = 0;
+    if (isDisposed) return;
     const width = hero.clientWidth;
     const height = hero.clientHeight;
 
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, quality.pixelRatioCap),
+    );
     renderer.setSize(width, height, false);
 
-    const reflectionPixelRatio = Math.min(window.devicePixelRatio, 2);
-    reflectiveFloor.reflector.getRenderTarget().setSize(
-      Math.min(Math.round(width * reflectionPixelRatio), 2048),
-      Math.min(Math.round(height * reflectionPixelRatio), 2048),
-    );
   }
+
+  function resize() {
+    if (resizeFrameId) return;
+    resizeFrameId = requestAnimationFrame(applyResize);
+  }
+
+  function getPerformanceReport() {
+    const particleReport = blockHuman?.getPerformanceReport() || null;
+    return {
+      quality: qualityName,
+      renderCalls: lastMainRenderCalls || renderer.info.render.calls,
+      triangles: renderer.info.render.triangles,
+      geometries: renderer.info.memory.geometries,
+      textures: renderer.info.memory.textures,
+      simulationPassesPerFrame:
+        particleReport?.simulationPassesLastFrame || 0,
+      planarReflectionPassesPerFrame: 0,
+      planarReflectionRenderTargets: 0,
+      renderTargets: particleReport?.renderTargets || [],
+      approximateTextureMemoryBytes:
+        particleReport?.approximateTextureMemoryBytes || 0,
+      particleCount: quality.particleCount,
+      pixelRatio: renderer.getPixelRatio(),
+      approximateFrameTimeMs: Number(frameTimeAverage.toFixed(2)),
+      particleCollisionsEnabled:
+        particleReport?.particleCollisionsEnabled || false,
+      heroInsideViewport: heroVisible,
+      documentVisible: documentActive,
+      suspended: !shouldRender(),
+      raycastTargetTriangles:
+        particleReport?.raycastTargetTriangles || 0,
+      particleMaterial: particleReport?.particleMaterial || null,
+      innerHumanMaterial: particleReport?.innerHumanMaterial || null,
+    };
+  }
+
+  if (developmentMode) window.getPerformanceReport = getPerformanceReport;
 
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(hero);
@@ -558,14 +609,24 @@ if (hero && canvas) {
   window.addEventListener("focus", handleWindowFocus);
   window.addEventListener("blur", handleWindowBlur);
 
-  window.addEventListener("pagehide", () => {
+  function disposeHero() {
+    if (isDisposed) return;
     isDisposed = true;
     stopRendering();
+    if (resizeFrameId) cancelAnimationFrame(resizeFrameId);
+    resizeFrameId = 0;
     intersectionObserver.disconnect();
     resizeObserver.disconnect();
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     window.removeEventListener("focus", handleWindowFocus);
     window.removeEventListener("blur", handleWindowBlur);
+    window.removeEventListener("pagehide", disposeHero);
+    if (
+      developmentMode &&
+      window.getPerformanceReport === getPerformanceReport
+    ) {
+      delete window.getPerformanceReport;
+    }
     sphereGeometry.dispose();
     sphereGlassMaterial.dispose();
     sphereFresnelMaterial.dispose();
@@ -574,11 +635,6 @@ if (hero && canvas) {
       backgroundTitle.geometry.dispose();
       backgroundTitle.material.dispose();
     }
-    reflectiveFloor.reflector.getRenderTarget().dispose();
-    reflectiveFloor.reflector.material.dispose();
-    reflectiveFloor.overlayMaterial.dispose();
-    reflectiveFloor.reflectionFade.dispose();
-    reflectiveFloor.geometry.dispose();
     studio.cycloramaGeometry.dispose();
     studio.cycloramaMaterial.dispose();
     studio.backgroundGeometry.dispose();
@@ -586,13 +642,12 @@ if (hero && canvas) {
     contactShadow.mesh.geometry.dispose();
     contactShadow.material.dispose();
     contactShadow.texture.dispose();
-    bottomGlow.mesh.geometry.dispose();
-    bottomGlow.material.dispose();
-    bottomGlow.texture.dispose();
     blockHuman?.dispose();
     environmentTarget.dispose();
     renderer.dispose();
-  });
+  }
+
+  window.addEventListener("pagehide", disposeHero);
 
   syncRendering();
 }

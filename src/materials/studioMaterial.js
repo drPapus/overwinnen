@@ -2,20 +2,8 @@ import * as THREE from "three";
 
 export const STUDIO_COLOR = new THREE.Color(0x090d14);
 
-const FLOOR_OPACITY = 0.95;
 const BACKGROUND_TOP_COLOR = new THREE.Color(0x101925);
 const BACKGROUND_CENTER_COLOR = new THREE.Color(0x0b111a);
-
-/** Creates the subtle reflective layer over the studio floor. */
-export function createStudioFloorMaterial(alphaMap) {
-  return new THREE.MeshBasicMaterial({
-    color: STUDIO_COLOR.clone(),
-    alphaMap,
-    transparent: true,
-    opacity: FLOOR_OPACITY,
-    depthWrite: false,
-  });
-}
 
 /** Creates the matte material shared by the curved studio floor and backdrop. */
 export function createStudioCycloramaMaterial() {
