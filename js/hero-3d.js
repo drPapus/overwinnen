@@ -82,6 +82,161 @@ function selectAimQuality(renderer) {
   return "high";
 }
 
+function createHeroPipelineProfiler(renderer, enabled) {
+  if (!enabled) return null;
+
+  const sampleFrames = 120;
+  const stageNames = [
+    "pointerRaycast",
+    "particleVelocity",
+    "particlePosition",
+    "externalCollision",
+    "particleCollision",
+    "scaleRT",
+    "mainSceneRender",
+    "postProcessing",
+  ];
+  const countNames = [
+    "setRenderTarget",
+    "rendererRender",
+    "renderTargetSetSize",
+    "renderTargetCreations",
+    "renderTargetDisposals",
+  ];
+  const totals = Object.fromEntries(
+    [...stageNames, ...countNames].map((name) => [name, 0]),
+  );
+  const current = Object.fromEntries(
+    [...stageNames, ...countNames].map((name) => [name, 0]),
+  );
+  const stageCallTotals = Object.fromEntries(
+    stageNames.map((name) => [name, 0]),
+  );
+  const stageCallCurrent = Object.fromEntries(
+    stageNames.map((name) => [name, 0]),
+  );
+  const lifetime = Object.fromEntries(
+    countNames.map((name) => [name, 0]),
+  );
+  let frames = 0;
+  let frameStart = 0;
+  let totalFrameSubmissionTime = 0;
+  let lastTable = null;
+  const originalSetRenderTarget = renderer.setRenderTarget;
+  const originalRender = renderer.render;
+
+  renderer.setRenderTarget = function (...args) {
+    current.setRenderTarget += 1;
+    lifetime.setRenderTarget += 1;
+    return originalSetRenderTarget.apply(this, args);
+  };
+  renderer.render = function (...args) {
+    current.rendererRender += 1;
+    lifetime.rendererRender += 1;
+    return originalRender.apply(this, args);
+  };
+
+  function resetCurrent() {
+    Object.keys(current).forEach((name) => {
+      current[name] = 0;
+    });
+    Object.keys(stageCallCurrent).forEach((name) => {
+      stageCallCurrent[name] = 0;
+    });
+  }
+
+  return {
+    beginFrame() {
+      resetCurrent();
+      frameStart = performance.now();
+    },
+    measure(name, callback) {
+      const start = performance.now();
+      try {
+        return callback();
+      } finally {
+        current[name] += performance.now() - start;
+        stageCallCurrent[name] += 1;
+      }
+    },
+    count(name, amount = 1) {
+      current[name] += amount;
+      if (name in lifetime) lifetime[name] += amount;
+    },
+    trackRenderTarget(target) {
+      current.renderTargetCreations += 1;
+      lifetime.renderTargetCreations += 1;
+      const originalSetSize = target.setSize;
+      const originalDispose = target.dispose;
+      target.setSize = function (...args) {
+        current.renderTargetSetSize += 1;
+        lifetime.renderTargetSetSize += 1;
+        return originalSetSize.apply(this, args);
+      };
+      target.dispose = function (...args) {
+        current.renderTargetDisposals += 1;
+        lifetime.renderTargetDisposals += 1;
+        return originalDispose.apply(this, args);
+      };
+      return target;
+    },
+    endFrame() {
+      totalFrameSubmissionTime += performance.now() - frameStart;
+      Object.keys(totals).forEach((name) => {
+        totals[name] += current[name];
+      });
+      Object.keys(stageCallTotals).forEach((name) => {
+        stageCallTotals[name] += stageCallCurrent[name];
+      });
+      frames += 1;
+      if (frames !== sampleFrames) return;
+      lastTable = [
+        ...stageNames.map((stage) => ({
+          stage,
+          averageCpuMs: Number((totals[stage] / frames).toFixed(3)),
+          averageCalls: Number(
+            (stageCallTotals[stage] / frames).toFixed(3),
+          ),
+        })),
+        {
+          stage: "completeAnimationCallback",
+          averageCpuMs: Number(
+            (totalFrameSubmissionTime / frames).toFixed(3),
+          ),
+          averageCalls: 1,
+        },
+        ...countNames.map((stage) => ({
+          stage,
+          averageCpuMs: null,
+          averageCalls: Number((totals[stage] / frames).toFixed(3)),
+        })),
+      ];
+      console.info(
+        `[AIM hero] ${sampleFrames}-frame CPU submission profile`,
+      );
+      console.table(lastTable);
+      console.info(
+        "[AIM hero] profile JSON",
+        JSON.stringify(lastTable),
+      );
+    },
+    getReport() {
+      return {
+        sampledFrames: frames,
+        targetFrames: sampleFrames,
+        table: lastTable,
+        currentFrame: { ...current },
+        currentStageCalls: { ...stageCallCurrent },
+        lifetime: { ...lifetime },
+      };
+    },
+    restore() {
+      renderer.setRenderTarget = originalSetRenderTarget;
+      renderer.render = originalRender;
+    },
+  };
+}
+
 // Generate a studio-like reflection map procedurally; no external HDR is needed.
 function setupEnvironment(renderer, scene) {
   const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -261,6 +416,10 @@ if (hero && canvas) {
     location.hostname === "localhost" ||
     location.hostname === "127.0.0.1" ||
     new URLSearchParams(location.search).has("aimDebug");
+  const pipelineProfiler = createHeroPipelineProfiler(
+    renderer,
+    developmentMode,
+  );
 
   renderer.setPixelRatio(
     Math.min(window.devicePixelRatio, quality.pixelRatioCap),
@@ -392,6 +551,7 @@ if (hero && canvas) {
         debugParameters.get("innerCrystalDebug") ||
         "crystal+particles",
       visualQuality: quality.physicalMaterial ? "desktop" : "mobile",
+      performanceProfiler: pipelineProfiler,
       visual: {
         preset: "dark-crystal-metal",
       },
@@ -466,6 +626,9 @@ if (hero && canvas) {
   function animate(time) {
     animationFrameId = null;
     if (!shouldRender()) return;
+    const profilingFrame =
+      pipelineProfiler && blockHuman?.simulationInitialized;
+    profilingFrame && pipelineProfiler.beginFrame();
 
     const delta = lastFrameTime
       ? Math.min((time - lastFrameTime) / 1000, 1 / 30)
@@ -484,8 +647,15 @@ if (hero && canvas) {
     modelRotationY += delta * 0.03;
     blockHuman?.setRotationY(modelRotationY);
     blockHuman?.update(delta, activeElapsedTime);
-    renderer.render(scene, camera);
+    if (pipelineProfiler) {
+      pipelineProfiler.measure("mainSceneRender", () => {
+        renderer.render(scene, camera);
+      });
+    } else {
+      renderer.render(scene, camera);
+    }
     lastMainRenderCalls = renderer.info.render.calls;
+    profilingFrame && pipelineProfiler.endFrame();
     animationFrameId = requestAnimationFrame(animate);
   }
 
@@ -572,6 +742,7 @@ if (hero && canvas) {
         particleReport?.raycastTargetTriangles || 0,
       particleMaterial: particleReport?.particleMaterial || null,
       innerHumanMaterial: particleReport?.innerHumanMaterial || null,
+      pipelineProfile: pipelineProfiler?.getReport() || null,
     };
   }
 
@@ -644,6 +815,7 @@ if (hero && canvas) {
     contactShadow.texture.dispose();
     blockHuman?.dispose();
     environmentTarget.dispose();
+    pipelineProfiler?.restore();
     renderer.dispose();
   }
 

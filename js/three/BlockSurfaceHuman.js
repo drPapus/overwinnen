@@ -1820,6 +1820,7 @@ export class BlockSurfaceHuman {
     visual = {},
     visualQuality = "desktop",
     materialDebugMode = "none",
+    performanceProfiler = null,
   }) {
     this.scene = scene;
     this.modelUrl = modelUrl;
@@ -1955,6 +1956,7 @@ export class BlockSurfaceHuman {
     };
     this.visualQuality = visualQuality;
     this.materialDebugMode = materialDebugMode;
+    this.performanceProfiler = performanceProfiler;
     this.pointerVisualActivity = 0;
     this.innerGlassMaterial = null;
     this.innerGlassBackMaterial = null;
@@ -2936,7 +2938,7 @@ export class BlockSurfaceHuman {
     );
     target.texture.generateMipmaps = false;
     target.texture.name = name;
-    return target;
+    return this.performanceProfiler?.trackRenderTarget(target) || target;
   }
 
   createPackedFloatTarget(width, height, name) {
@@ -2953,7 +2955,7 @@ export class BlockSurfaceHuman {
     });
     target.texture.generateMipmaps = false;
     target.texture.name = name;
-    return target;
+    return this.performanceProfiler?.trackRenderTarget(target) || target;
   }
 
   createParticleCollisionUniforms() {
@@ -4178,6 +4180,12 @@ export class BlockSurfaceHuman {
     );
   }
 
+  measurePerformanceStage(name, callback) {
+    return this.performanceProfiler
+      ? this.performanceProfiler.measure(name, callback)
+      : callback();
+  }
+
   update(deltaTime, elapsedTime) {
     this._simulationPassesCurrentFrame = 0;
     this._simulationPassesLastFrame = 0;
@@ -4196,7 +4204,9 @@ export class BlockSurfaceHuman {
       1 / 30,
     );
     if (this.pointerNeedsRaycast) {
-      this._updatePointerRaycast();
+      this.measurePerformanceStage("pointerRaycast", () => {
+        this._updatePointerRaycast();
+      });
     } else if (this.smoothedPointerVelocity.lengthSq() > 0) {
       const pointerVelocityDecay = Math.exp(
         -Math.max(0, this.pointerConfig.inactiveVelocityDecay) *
@@ -4275,8 +4285,10 @@ export class BlockSurfaceHuman {
       ? 0
       : this._scaleSettleElapsed + safeDeltaTime;
     if (scalePointerActive || this._scaleSettleElapsed <= 1) {
-      this.withPreservedRendererState(() => {
-        this.updateParticleScaleState(safeDeltaTime);
+      this.measurePerformanceStage("scaleRT", () => {
+        this.withPreservedRendererState(() => {
+          this.updateParticleScaleState(safeDeltaTime);
+        });
       });
     }
     this.syncRenderTextures(elapsedTime);
@@ -4422,57 +4434,69 @@ export class BlockSurfaceHuman {
     collisionVelocityUniforms.uCollisionEnabled.value =
       this.collisionInfluence;
     collisionVelocityUniforms.uDeltaTime.value = deltaTime;
-    this.renderSimulationPass(
-      this.velocitySimulationMaterial,
-      this.predictedVelocityTarget,
-    );
-    this.renderSimulationPass(
-      this.positionSimulationMaterial,
-      this.predictedPositionTarget,
-    );
-    this.renderSimulationPass(
-      this.collisionPositionMaterial,
-      this.nextPositionTarget,
-    );
+    this.measurePerformanceStage("particleVelocity", () => {
+      this.renderSimulationPass(
+        this.velocitySimulationMaterial,
+        this.predictedVelocityTarget,
+      );
+    });
+    this.measurePerformanceStage("particlePosition", () => {
+      this.renderSimulationPass(
+        this.positionSimulationMaterial,
+        this.predictedPositionTarget,
+      );
+    });
+    this.measurePerformanceStage("externalCollision", () => {
+      this.renderSimulationPass(
+        this.collisionPositionMaterial,
+        this.nextPositionTarget,
+      );
+    });
     if (particleCollisionsActive) {
-      if (rebuildParticleVoxels || !this._particleVoxelDataValid) {
-        this.rebuildParticleVoxelStructure(
-          this.nextPositionTarget.texture,
+      this.measurePerformanceStage("particleCollision", () => {
+        if (rebuildParticleVoxels || !this._particleVoxelDataValid) {
+          this.rebuildParticleVoxelStructure(
+            this.nextPositionTarget.texture,
+          );
+        }
+        const particlePositionUniforms =
+          this.particleCollisionPositionMaterial.uniforms;
+        particlePositionUniforms.uExternalCorrectedPositionTexture.value =
+          this.nextPositionTarget.texture;
+        this.syncParticleCollisionLookupUniforms(
+          this.particleCollisionPositionMaterial,
         );
-      }
-      const particlePositionUniforms =
-        this.particleCollisionPositionMaterial.uniforms;
-      particlePositionUniforms.uExternalCorrectedPositionTexture.value =
-        this.nextPositionTarget.texture;
-      this.syncParticleCollisionLookupUniforms(
-        this.particleCollisionPositionMaterial,
-      );
-      this.renderSimulationPass(
-        this.particleCollisionPositionMaterial,
-        this.particleCollisionPositionTarget,
-      );
+        this.renderSimulationPass(
+          this.particleCollisionPositionMaterial,
+          this.particleCollisionPositionTarget,
+        );
+      });
     }
-    this.renderSimulationPass(
-      this.collisionVelocityMaterial,
-      this.nextVelocityTarget,
-    );
-    if (particleCollisionsActive) {
-      const particleVelocityUniforms =
-        this.particleCollisionVelocityMaterial.uniforms;
-      particleVelocityUniforms.uExternalCorrectedVelocityTexture.value =
-        this.nextVelocityTarget.texture;
-      particleVelocityUniforms.uExternalCorrectedPositionTexture.value =
-        this.nextPositionTarget.texture;
-      particleVelocityUniforms.uParticleCorrectedPositionTexture.value =
-        this.particleCollisionPositionTarget.texture;
-      particleVelocityUniforms.uDeltaTime.value = deltaTime;
-      this.syncParticleCollisionLookupUniforms(
-        this.particleCollisionVelocityMaterial,
-      );
+    this.measurePerformanceStage("externalCollision", () => {
       this.renderSimulationPass(
-        this.particleCollisionVelocityMaterial,
-        this.particleCollisionVelocityTarget,
+        this.collisionVelocityMaterial,
+        this.nextVelocityTarget,
       );
+    });
+    if (particleCollisionsActive) {
+      this.measurePerformanceStage("particleCollision", () => {
+        const particleVelocityUniforms =
+          this.particleCollisionVelocityMaterial.uniforms;
+        particleVelocityUniforms.uExternalCorrectedVelocityTexture.value =
+          this.nextVelocityTarget.texture;
+        particleVelocityUniforms.uExternalCorrectedPositionTexture.value =
+          this.nextPositionTarget.texture;
+        particleVelocityUniforms.uParticleCorrectedPositionTexture.value =
+          this.particleCollisionPositionTarget.texture;
+        particleVelocityUniforms.uDeltaTime.value = deltaTime;
+        this.syncParticleCollisionLookupUniforms(
+          this.particleCollisionVelocityMaterial,
+        );
+        this.renderSimulationPass(
+          this.particleCollisionVelocityMaterial,
+          this.particleCollisionVelocityTarget,
+        );
+      });
 
       const previousVelocityTarget = this.currentVelocityTarget;
       this.currentVelocityTarget =
