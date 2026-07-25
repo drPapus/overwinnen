@@ -78,6 +78,19 @@ const DEFAULT_POINTER = {
   inactiveVelocityDecay: 14,
   raycastRecursive: true,
 };
+const DEFAULT_AUTOMATIC_MOBILE_INTERACTION = {
+  enabled: true,
+  segmentDurationMin: 2.2,
+  segmentDurationMax: 4,
+  pauseAtTargetMin: 0,
+  pauseAtTargetMax: 0.35,
+  localTargetDistanceMin: 0.08,
+  localTargetDistanceMax: 0.28,
+  distantJumpChance: 0.08,
+  viewFacingBias: 0.65,
+  speedSmoothing: 10,
+  allowTouchOverride: false,
+};
 const DEFAULT_LOCALIZED_ACTIVITY = {
   enabled: true,
   radius: 0.2,
@@ -1804,6 +1817,8 @@ export class BlockSurfaceHuman {
     debugCollision = false,
     collisionDebugMode = "none",
     pointer = {},
+    interaction = {},
+    autoInteractionDebug = false,
     pointerDebugMode = "none",
     localizedActivity = {},
     activityDebugMode = "none",
@@ -1874,6 +1889,19 @@ export class BlockSurfaceHuman {
     this.collisionTexture = null;
     this._collisionAbortController = null;
     this.pointerConfig = { ...DEFAULT_POINTER, ...pointer };
+    this.interactionConfig = {
+      mode: interaction.mode || "auto",
+      automaticMobile: {
+        ...DEFAULT_AUTOMATIC_MOBILE_INTERACTION,
+        ...(interaction.automaticMobile || {}),
+      },
+    };
+    this.autoInteractionDebug = Boolean(autoInteractionDebug);
+    this.automaticInteractionEnabled = Boolean(
+      this.interactionConfig.automaticMobile.enabled,
+    );
+    this.automaticInteractionSpeed = 1;
+    this.resolvedInteractionMode = "pointer";
     this.pointerInteractionEnabled = Boolean(
       this.pointerConfig.enabled,
     );
@@ -1937,6 +1965,22 @@ export class BlockSurfaceHuman {
     this._onPointerMove = this._handlePointerMove.bind(this);
     this._onPointerLeave = this._handlePointerLeave.bind(this);
     this._onPointerCancel = this._handlePointerLeave.bind(this);
+    this.autoInteractionSurfacePoints = [];
+    this.autoPointerCurrentPosition = new THREE.Vector3();
+    this.autoPointerStartPosition = new THREE.Vector3();
+    this.autoPointerTargetPosition = new THREE.Vector3();
+    this.autoPointerPreviousPosition = new THREE.Vector3();
+    this.autoPointerVelocity = new THREE.Vector3();
+    this.autoPointerCurrentNormal = new THREE.Vector3(0, 0, 1);
+    this.autoPointerStartNormal = new THREE.Vector3(0, 0, 1);
+    this.autoPointerTargetNormal = new THREE.Vector3(0, 0, 1);
+    this.autoPointerProgress = 0;
+    this.autoPointerDuration = 2.5;
+    this.autoPointerPauseRemaining = 0;
+    this.autoPointerInitialized = false;
+    this._autoPointerViewDirection = new THREE.Vector3();
+    this._autoPointerTangentCandidate = new THREE.Vector3();
+    this._autoInteractionDebugGroup = null;
     this.particleCollisionConfig = {
       ...DEFAULT_PARTICLE_COLLISIONS,
       ...particleCollisions,
@@ -2530,6 +2574,10 @@ export class BlockSurfaceHuman {
         // Inverse-transpose transformation keeps normals correct under scaling.
         worldNormal.copy(normal).applyMatrix3(normalMatrix).normalize();
         worldPosition.addScaledVector(worldNormal, surfaceOffset);
+        this.autoInteractionSurfacePoints.push({
+          position: worldPosition.clone(),
+          normal: worldNormal.clone(),
+        });
         simulationBounds.expandByPoint(worldPosition);
         const debugPosition = this._debugSamplePositions?.get(instanceIndex);
         if (debugPosition) {
@@ -2602,7 +2650,8 @@ export class BlockSurfaceHuman {
     this.instancedMesh.instanceMatrix.needsUpdate = true;
     this.scene.add(this.instancedMesh);
     this.configureInnerGlassMaterial();
-    this.attachPointerListeners();
+    this.setInteractionMode(this.interactionConfig.mode);
+    this.initializeAutomaticInteraction();
     debugLog("[BlockSurfaceHuman] Instances created:", instanceIndex);
     debugLog(
       "[BlockSurfaceHuman] Stage 8 pointer interaction initialized",
@@ -3899,6 +3948,268 @@ export class BlockSurfaceHuman {
     );
   }
 
+  resolveInteractionMode(mode = this.interactionConfig.mode) {
+    if (mode === "pointer" || mode === "automatic") return mode;
+    const hasFinePointer = window.matchMedia("(pointer: fine)").matches;
+    const hasHover = window.matchMedia("(hover: hover)").matches;
+    return !hasFinePointer || !hasHover ? "automatic" : "pointer";
+  }
+
+  setInteractionMode(mode) {
+    if (!["auto", "pointer", "automatic"].includes(mode)) {
+      throw new Error(
+        '[BlockSurfaceHuman] interaction mode must be "auto", "pointer", or "automatic".',
+      );
+    }
+    this.interactionConfig.mode = mode;
+    this.resolvedInteractionMode = this.resolveInteractionMode(mode);
+    this.clearPointerInteraction();
+    if (this.resolvedInteractionMode === "pointer") {
+      this.attachPointerListeners();
+    } else {
+      this.detachPointerListeners();
+      this.autoPointerInitialized = false;
+    }
+    return this.resolvedInteractionMode;
+  }
+
+  setAutomaticInteractionEnabled(enabled) {
+    this.automaticInteractionEnabled = Boolean(enabled);
+    if (!this.automaticInteractionEnabled) this.clearPointerInteraction();
+  }
+
+  setAutomaticInteractionSpeed(value) {
+    if (Number.isFinite(value) && value > 0) {
+      this.automaticInteractionSpeed = value;
+    }
+  }
+
+  setAutomaticInteractionRadius(value) {
+    if (!Number.isFinite(value) || value <= 0) return;
+    this.pointerConfig.radius = value;
+    this.localizedActivityConfig.radius = value;
+    if (this.velocitySimulationMaterial) {
+      this.velocitySimulationMaterial.uniforms.uPointerRadius.value = value;
+      this.velocitySimulationMaterial.uniforms.uPointerActivityRadius.value =
+        value;
+    }
+  }
+
+  initializeAutomaticInteraction() {
+    if (!this.autoInteractionSurfacePoints.length) return;
+    const initial =
+      this.autoInteractionSurfacePoints[
+        Math.floor(this.autoInteractionSurfacePoints.length * 0.42)
+      ];
+    this.autoPointerCurrentPosition.copy(initial.position);
+    this.autoPointerStartPosition.copy(initial.position);
+    this.autoPointerTargetPosition.copy(initial.position);
+    this.autoPointerPreviousPosition.copy(initial.position);
+    this.autoPointerCurrentNormal.copy(initial.normal).normalize();
+    this.autoPointerStartNormal.copy(this.autoPointerCurrentNormal);
+    this.autoPointerTargetNormal.copy(this.autoPointerCurrentNormal);
+    this.autoPointerInitialized = true;
+    this.selectNextAutomaticTarget();
+    if (this.autoInteractionDebug) this.createAutomaticDebugHelpers();
+  }
+
+  selectNextAutomaticTarget() {
+    const samples = this.autoInteractionSurfacePoints;
+    if (!samples.length) return;
+    const config = this.interactionConfig.automaticMobile;
+    const allowDistant = Math.random() < config.distantJumpChance;
+    const minimum = Math.max(0, config.localTargetDistanceMin);
+    const maximum = Math.max(minimum, config.localTargetDistanceMax);
+    let selected = null;
+    let totalWeight = 0;
+
+    this.instancedMesh?.updateWorldMatrix(true, false);
+    for (let index = 0; index < samples.length; index += 1) {
+      const sample = samples[index];
+      const distance = sample.position.distanceTo(
+        this.autoPointerCurrentPosition,
+      );
+      if (
+        !allowDistant &&
+        (distance < minimum || distance > maximum)
+      ) {
+        continue;
+      }
+      if (allowDistant && distance < maximum) continue;
+
+      this._autoPointerViewDirection
+        .copy(this.camera.position)
+        .sub(sample.position)
+        .normalize();
+      const facing = Math.max(
+        -0.25,
+        sample.normal.dot(this._autoPointerViewDirection),
+      );
+      const weight =
+        0.15 +
+        (1 - config.viewFacingBias) +
+        Math.max(0, facing) * config.viewFacingBias;
+      totalWeight += weight;
+      if (Math.random() * totalWeight <= weight) selected = sample;
+    }
+
+    if (!selected) {
+      let closestDistance = Infinity;
+      for (let index = 0; index < samples.length; index += 1) {
+        const sample = samples[index];
+        const distance = sample.position.distanceTo(
+          this.autoPointerCurrentPosition,
+        );
+        if (distance >= minimum && distance < closestDistance) {
+          selected = sample;
+          closestDistance = distance;
+        }
+      }
+      selected ||= samples[0];
+    }
+    this.autoPointerStartPosition.copy(this.autoPointerCurrentPosition);
+    this.autoPointerTargetPosition.copy(selected.position);
+    this.autoPointerStartNormal.copy(this.autoPointerCurrentNormal);
+    this.autoPointerTargetNormal.copy(selected.normal).normalize();
+    if (
+      this.autoPointerStartNormal.dot(this.autoPointerTargetNormal) < 0
+    ) {
+      this.autoPointerTargetNormal.multiplyScalar(-1);
+    }
+    this.autoPointerProgress = 0;
+    this.autoPointerDuration =
+      THREE.MathUtils.lerp(
+        config.segmentDurationMin,
+        config.segmentDurationMax,
+        Math.random(),
+      ) / this.automaticInteractionSpeed;
+  }
+
+  updateAutomaticInteraction(deltaTime) {
+    if (!this.autoPointerInitialized) {
+      this.initializeAutomaticInteraction();
+    }
+    if (!this.autoPointerInitialized) return;
+    const config = this.interactionConfig.automaticMobile;
+    if (this.autoPointerPauseRemaining > 0) {
+      this.autoPointerPauseRemaining = Math.max(
+        0,
+        this.autoPointerPauseRemaining - deltaTime,
+      );
+      this.autoPointerVelocity.set(0, 0, 0);
+      this.smoothedPointerVelocity.multiplyScalar(
+        Math.exp(-config.speedSmoothing * deltaTime),
+      );
+    } else {
+      this.autoPointerPreviousPosition.copy(
+        this.autoPointerCurrentPosition,
+      );
+      this.autoPointerProgress +=
+        deltaTime / Math.max(this.autoPointerDuration, 0.001);
+      const t = THREE.MathUtils.clamp(
+        this.autoPointerProgress,
+        0,
+        1,
+      );
+      const eased = t * t * (3 - 2 * t);
+      this.autoPointerCurrentPosition.lerpVectors(
+        this.autoPointerStartPosition,
+        this.autoPointerTargetPosition,
+        eased,
+      );
+      this.autoPointerCurrentNormal
+        .lerpVectors(
+          this.autoPointerStartNormal,
+          this.autoPointerTargetNormal,
+          eased,
+        )
+        .normalize();
+      this.autoPointerVelocity
+        .copy(this.autoPointerCurrentPosition)
+        .sub(this.autoPointerPreviousPosition)
+        .divideScalar(Math.max(deltaTime, 1 / 240));
+      const alpha =
+        1 - Math.exp(-config.speedSmoothing * deltaTime);
+      this.smoothedPointerVelocity.lerp(
+        this.autoPointerVelocity,
+        alpha,
+      );
+      if (t >= 1) {
+        this.autoPointerPauseRemaining = THREE.MathUtils.lerp(
+          config.pauseAtTargetMin,
+          config.pauseAtTargetMax,
+          Math.random(),
+        );
+        this.selectNextAutomaticTarget();
+      }
+    }
+
+    this.pointerLocalPosition.copy(this.autoPointerCurrentPosition);
+    this.pointerLocalNormal.copy(this.autoPointerCurrentNormal);
+    const tangent = this._autoPointerTangentCandidate
+      .copy(this.smoothedPointerVelocity)
+      .addScaledVector(
+        this.pointerLocalNormal,
+        -this.smoothedPointerVelocity.dot(this.pointerLocalNormal),
+      );
+    if (tangent.lengthSq() > 1e-8) {
+      tangent.normalize();
+      if (tangent.dot(this.pointerLocalTangent) < 0) {
+        tangent.multiplyScalar(-1);
+      }
+      this.pointerLocalTangent.copy(tangent);
+    } else {
+      this.pointerLocalTangent
+        .addScaledVector(
+          this.pointerLocalNormal,
+          -this.pointerLocalTangent.dot(this.pointerLocalNormal),
+        )
+        .normalize();
+    }
+    this.pointerLocalBitangent
+      .crossVectors(
+        this.pointerLocalNormal,
+        this.pointerLocalTangent,
+      )
+      .normalize();
+    this.pointerLocalTangent
+      .crossVectors(
+        this.pointerLocalBitangent,
+        this.pointerLocalNormal,
+      )
+      .normalize();
+    this.pointerVelocity.copy(this.autoPointerVelocity);
+    this.pointerActive = true;
+    this.updateAutomaticDebugHelpers();
+  }
+
+  createAutomaticDebugHelpers() {
+    if (this._autoInteractionDebugGroup || !this.scene) return;
+    const group = new THREE.Group();
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.012, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+    );
+    const origin = new THREE.Vector3();
+    group.add(
+      sphere,
+      new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), origin, 0.12, 0x20d3e6),
+      new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, 0.12, 0x6ee7b7),
+      new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), origin, 0.12, 0xff6b8a),
+    );
+    this._autoInteractionDebugGroup = group;
+    this.scene.add(group);
+  }
+
+  updateAutomaticDebugHelpers() {
+    const group = this._autoInteractionDebugGroup;
+    if (!group) return;
+    group.position.copy(this.pointerLocalPosition);
+    group.children[1].setDirection(this.pointerLocalTangent);
+    group.children[2].setDirection(this.pointerLocalBitangent);
+    group.children[3].setDirection(this.pointerLocalNormal);
+  }
+
   attachPointerListeners() {
     const canvas = this.renderer?.domElement;
     if (!canvas || this._pointerListenersAttached) return;
@@ -4203,11 +4514,24 @@ export class BlockSurfaceHuman {
       Math.max(Number.isFinite(deltaTime) ? deltaTime : 0, 0),
       1 / 30,
     );
-    if (this.pointerNeedsRaycast) {
+    const automaticInteractionActive =
+      this.resolvedInteractionMode === "automatic" &&
+      this.automaticInteractionEnabled &&
+      this.effectVisible &&
+      this.simulationRunning;
+    if (automaticInteractionActive) {
+      this.updateAutomaticInteraction(safeDeltaTime);
+    } else if (
+      this.resolvedInteractionMode === "pointer" &&
+      this.pointerNeedsRaycast
+    ) {
       this.measurePerformanceStage("pointerRaycast", () => {
         this._updatePointerRaycast();
       });
-    } else if (this.smoothedPointerVelocity.lengthSq() > 0) {
+    } else if (
+      this.resolvedInteractionMode === "pointer" &&
+      this.smoothedPointerVelocity.lengthSq() > 0
+    ) {
       const pointerVelocityDecay = Math.exp(
         -Math.max(0, this.pointerConfig.inactiveVelocityDecay) *
           safeDeltaTime,
@@ -4227,6 +4551,8 @@ export class BlockSurfaceHuman {
         this.pointerVelocity.set(0, 0, 0);
         this.smoothedPointerVelocity.set(0, 0, 0);
       }
+    } else if (!automaticInteractionActive) {
+      this.clearPointerInteraction();
     }
     this.syncPointerUniforms();
     this.syncVisualUniforms(safeDeltaTime);
@@ -4347,6 +4673,9 @@ export class BlockSurfaceHuman {
     );
     return {
       particleCount: INSTANCE_COUNT,
+      interactionMode: this.resolvedInteractionMode,
+      automaticInteractionEnabled:
+        this.automaticInteractionEnabled,
       simulationPassesLastFrame: this._simulationPassesLastFrame,
       particleCollisionsEnabled:
         this.particleCollisionInfluence > 0 &&
@@ -6019,6 +6348,14 @@ gl_FragColor.rgb = ${pointerDebugColor};`,
     this.autoActivate = false;
     this.detachPointerListeners();
     this.clearPointerInteraction();
+    if (this._autoInteractionDebugGroup) {
+      this.scene?.remove(this._autoInteractionDebugGroup);
+      this._autoInteractionDebugGroup.traverse((object) => {
+        object.geometry?.dispose();
+        object.material?.dispose();
+      });
+      this._autoInteractionDebugGroup = null;
+    }
     this._sdfAbortController?.abort();
     this._sdfAbortController = null;
     this._collisionAbortController?.abort();
@@ -6079,6 +6416,7 @@ gl_FragColor.rgb = ${pointerDebugColor};`,
     this.innerGlassMaterial = null;
     this.innerGlassBackMaterial = null;
     this.pointerRaycastMeshes = [];
+    this.autoInteractionSurfacePoints = [];
     this._pointerIntersections.length = 0;
     this.instancedMesh = null;
     this.geometry = null;

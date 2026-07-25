@@ -577,6 +577,21 @@ if (hero && canvas) {
         enabled: false,
         quality: qualityName === "high" ? "desktop" : "mobile",
       },
+      interaction: {
+        mode: "auto",
+        automaticMobile: {
+          enabled: true,
+          segmentDurationMin: 2.2,
+          segmentDurationMax: 4,
+          localTargetDistanceMin: 0.08,
+          localTargetDistanceMax: 0.28,
+          distantJumpChance: 0.08,
+          viewFacingBias: 0.65,
+          speedSmoothing: 10,
+          allowTouchOverride: false,
+        },
+      },
+      autoInteractionDebug: debugParameters.has("autoInteractionDebug"),
       activityDebugMode:
         debugParameters.get("particleActivityDebug") || "none",
       particleStateDebugMode:
