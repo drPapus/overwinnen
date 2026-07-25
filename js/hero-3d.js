@@ -1,7 +1,7 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/environments/RoomEnvironment.js";
 import { Reflector } from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/objects/Reflector.js";
+import { BlockSurfaceHuman } from "./three/BlockSurfaceHuman.js";
 import {
   createSphereReflectionEnvironment,
   disposeSphereReflectionEnvironment,
@@ -11,7 +11,6 @@ import { createBackgroundTitle } from "../src/objects/backgroundTitle.js";
 import {
   createBottomGlowMaterial,
   createContactShadowMaterial,
-  createCrystalMaterial,
   createGlassSphereMaterial,
   createSphereFresnelMaterial,
   createStudioBackgroundMaterial,
@@ -31,28 +30,6 @@ function setupEnvironment(renderer, scene) {
   pmremGenerator.dispose();
 
   return environmentTarget;
-}
-
-// Replace imported materials without touching any GLB geometry or transforms.
-function applyCrystalMaterial(root) {
-  const crystalMaterial = createCrystalMaterial();
-  const importedMaterials = new Set();
-
-  root.traverse((child) => {
-    if (!child.isMesh) return;
-
-    const materials = Array.isArray(child.material)
-      ? child.material
-      : [child.material];
-    materials.forEach((material) => importedMaterials.add(material));
-
-    child.material = crystalMaterial;
-    child.castShadow = true;
-    child.receiveShadow = true;
-  });
-
-  importedMaterials.forEach((material) => material?.dispose());
-  return crystalMaterial;
 }
 
 // Build a continuous floor-to-wall sweep with no sharp horizon corner.
@@ -157,6 +134,21 @@ function createReflectiveFloor(width, height) {
   group.add(reflector, overlay);
 
   return { group, geometry, overlayMaterial, reflectionFade, reflector };
+}
+
+// Keep valid GPU blocks in the main scene while preventing the planar
+// reflection pass from presenting them as detached particles below the floor.
+function excludeObjectFromPlanarReflection(reflector, object) {
+  const renderReflection = reflector.onBeforeRender;
+  reflector.onBeforeRender = function (...args) {
+    const wasVisible = object.visible;
+    object.visible = false;
+    try {
+      renderReflection.apply(this, args);
+    } finally {
+      object.visible = wasVisible;
+    }
+  };
 }
 
 // Generate reusable radial textures without loading image assets.
@@ -278,7 +270,7 @@ if (hero && canvas) {
   scene.add(studio.group);
 
   let model = null;
-  let crystalMaterial = null;
+  let blockHuman = null;
   const glassSphereGroup = new THREE.Group();
   const sphereGeometry = new THREE.SphereGeometry(0.35, 128, 96);
   const sphereGlassMaterial = createGlassSphereMaterial();
@@ -369,51 +361,82 @@ if (hero && canvas) {
   scene.add(floorEffects);
 
   function loadModel() {
-    const loader = new GLTFLoader();
-
-    loader.load(
-      "./src/assets/models/aim-human.glb",
-      (gltf) => {
-        model = gltf.scene;
-        model.scale.setScalar(0.8);
-
-        const bounds = new THREE.Box3().setFromObject(model);
+    const debugParameters = new URLSearchParams(window.location.search);
+    blockHuman = new BlockSurfaceHuman({
+      scene,
+      renderer,
+      camera,
+      modelUrl: "./src/assets/models/aim-human.glb",
+      sdfUrl: "./src/assets/models/aim-human-sdf.bin",
+      sdfMetadataUrl: "./src/assets/models/aim-human-sdf.json",
+      collisionUrl:
+        "./src/assets/collision/floor-collision-volume.bin",
+      collisionMetadataUrl:
+        "./src/assets/collision/floor-collision-volume.json",
+      particleCollisions: {
+        enabled: false,
+        quality: "desktop",
+      },
+      activityDebugMode:
+        debugParameters.get("particleActivityDebug") || "none",
+      particleStateDebugMode:
+        debugParameters.get("particleStateDebug") || "none",
+      infinityDebugMode:
+        debugParameters.get("infinityDebug") || "none",
+      particleScaleDebugMode:
+        debugParameters.get("particleScaleDebug") || "none",
+      innerCrystalDebugMode:
+        debugParameters.get("innerCrystalDebug") ||
+        "crystal+particles",
+      visualQuality: "desktop",
+      visual: {
+        preset: "dark-crystal-metal",
+      },
+      blockSize: 0.018,
+      prepareModel: (sourceModel) => {
+        sourceModel.scale.setScalar(0.8);
+        const bounds = new THREE.Box3().setFromObject(sourceModel);
         const center = bounds.getCenter(new THREE.Vector3());
-        model.position.x -= center.x;
-        model.position.y -= bounds.min.y;
+        sourceModel.position.x -= center.x;
+        sourceModel.position.y -= bounds.min.y;
         glassSphereGroup.position.set(0, center.y - bounds.min.y, -center.z);
         floorEffects.position.z = -center.z;
+      },
+      onProgress: (event) => {
+        if (!event.lengthComputable) return;
+        const progress = Math.round((event.loaded / event.total) * 100);
+        console.info(`Loading AIM human model: ${progress}%`);
+      },
+    });
 
-        crystalMaterial = applyCrystalMaterial(model);
-
-        scene.add(model);
+    blockHuman
+      .load()
+      .then(() => {
+        model = blockHuman.sourceRoot;
+        excludeObjectFromPlanarReflection(
+          reflectiveFloor.reflector,
+          blockHuman.instancedMesh,
+        );
+        blockHuman.setVisible(heroVisible);
+        blockHuman.startSimulation({ autoActivate: true });
         finalizeSphereReflection();
-        console.info("AIM human model loaded successfully.");
-      },
-      (event) => {
-        if (event.lengthComputable) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          console.info(`Loading AIM human model: ${progress}%`);
-        } else {
-          console.info(`Loading AIM human model: ${event.loaded} bytes received`);
-        }
-      },
-      (error) => {
-        console.error("Failed to load AIM human model.", error);
-      },
-    );
+        console.info("AIM block human model loaded successfully.");
+      })
+      .catch((error) => {
+        console.error("Failed to load AIM block human model.", error);
+      });
   }
 
   // Keep broad illumination weak so the crystal retains a dark transparent core.
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.06);
+  const ambientLight = new THREE.AmbientLight(0x3b4a58, 0.28);
   scene.add(ambientLight);
 
   // Side and rear directional lights create narrow contour highlights.
-  const crystalKeyLight = new THREE.DirectionalLight(0xb8d9ff, 1.2);
+  const crystalKeyLight = new THREE.DirectionalLight(0xbad8f0, 2.1);
   crystalKeyLight.position.set(4, 5, 6);
   scene.add(crystalKeyLight);
 
-  const crystalRimLight = new THREE.DirectionalLight(0xffffff, 1.6);
+  const crystalRimLight = new THREE.DirectionalLight(0x7290aa, 1.05);
   crystalRimLight.position.set(-5, -2, -4);
   scene.add(crystalRimLight);
 
@@ -429,6 +452,7 @@ if (hero && canvas) {
   let animationFrameId = null;
   let lastFrameTime = 0;
   let activeElapsedTime = 0;
+  let modelRotationY = 0;
 
   function shouldRender() {
     return heroVisible && documentActive && windowFocused && !isDisposed;
@@ -445,9 +469,9 @@ if (hero && canvas) {
     activeElapsedTime += delta;
     const sphereScale = 0.75 + Math.sin(activeElapsedTime) * 0.005;
     glassSphereGroup.scale.setScalar(sphereScale);
-    if (model) {
-      model.rotation.y += 0.0005;
-    }
+    modelRotationY += delta * 0.03;
+    blockHuman?.setRotationY(modelRotationY);
+    blockHuman?.update(delta, activeElapsedTime);
     renderer.render(scene, camera);
     animationFrameId = requestAnimationFrame(animate);
   }
@@ -508,6 +532,7 @@ if (hero && canvas) {
   const intersectionObserver = new IntersectionObserver(
     ([entry]) => {
       heroVisible = entry.isIntersecting;
+      blockHuman?.setVisible(heroVisible);
       syncRendering();
     },
     { threshold: 0 },
@@ -541,13 +566,6 @@ if (hero && canvas) {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     window.removeEventListener("focus", handleWindowFocus);
     window.removeEventListener("blur", handleWindowBlur);
-    if (model) {
-      model.traverse((child) => {
-        if (!child.isMesh) return;
-
-        child.geometry?.dispose();
-      });
-    }
     sphereGeometry.dispose();
     sphereGlassMaterial.dispose();
     sphereFresnelMaterial.dispose();
@@ -571,7 +589,7 @@ if (hero && canvas) {
     bottomGlow.mesh.geometry.dispose();
     bottomGlow.material.dispose();
     bottomGlow.texture.dispose();
-    crystalMaterial?.dispose();
+    blockHuman?.dispose();
     environmentTarget.dispose();
     renderer.dispose();
   });

@@ -1,0 +1,36 @@
+{
+  "sourceModel": "src/assets/models/aim-human.glb",
+  "resolution": [
+    96,
+    192,
+    96
+  ],
+  "boundsMin": [
+    -0.17254886909585262,
+    -0.05308432265382077,
+    -0.18151999216569698
+  ],
+  "boundsMax": [
+    0.17254886909585262,
+    0.4954536781023272,
+    0.2157275680801858
+  ],
+  "voxelSize": [
+    0.0035947681061635965,
+    0.002856968753938271,
+    0.004137995419227946
+  ],
+  "format": "float32",
+  "channels": 1,
+  "signConvention": "negative-inside-positive-outside",
+  "maxDistance": 0.35,
+  "padding": 0.05308432265382077,
+  "meshCount": 1,
+  "triangleCount": 153788,
+  "surfaceVoxelCount": 26262,
+  "outsideVoxelCount": 1705559,
+  "insideVoxelCount": 37651,
+  "unresolvedVoxelCount": 0,
+  "minimumDistance": -0.03445463255047798,
+  "maximumDistance": 0.2672514319419861
+}

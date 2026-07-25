@@ -304,12 +304,22 @@ a {
   display: block;
   z-index: 0;
   background-color: #090d14;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .hero-section > .container {
+  pointer-events: none;
   position: relative;
   z-index: 2;
+}
+
+.hero-section a,
+.hero-section button,
+.hero-section input,
+.hero-section textarea,
+.hero-section select,
+.hero-section [tabindex] {
+  pointer-events: auto;
 }
 
 .hero-grid {
@@ -591,7 +601,7 @@ a {
 
 .aim-card-position--assessment { top: 9%; left: -4%; }
 .aim-card-position--adaptation { top: 22%; right: -5%; }
-.aim-card-position--performance { bottom: 22%; left: -7%; }
+.aim-card-position--performance { bottom: -15%; left: -23%; }
 .aim-card-position--recovery { right: -2%; bottom: 8%; }
 
 .aim-card-float {
@@ -1293,7 +1303,7 @@ a {
 
   .aim-card-position--assessment { left: 1%; }
   .aim-card-position--adaptation { right: 0; }
-  .aim-card-position--performance { left: -1%; }
+  .aim-card-position--performance { bottom: -10%; left: -15%; }
   .aim-card-position--recovery { right: 2%; }
 }
 

@@ -1,0 +1,44 @@
+{
+  "sourceGeometry": {
+    "type": "box",
+    "name": "ReflectiveFloorCollider",
+    "center": [
+      0,
+      -0.064,
+      0
+    ],
+    "halfSize": [
+      1.2,
+      0.056,
+      1.2
+    ]
+  },
+  "resolution": [
+    128,
+    64,
+    128
+  ],
+  "boundsMin": [
+    -1.4,
+    -0.22,
+    -1.4
+  ],
+  "boundsMax": [
+    1.4,
+    0.1,
+    1.4
+  ],
+  "voxelSize": [
+    0.021875,
+    0.005,
+    0.021875
+  ],
+  "format": "float32",
+  "channels": 1,
+  "signConvention": "negative-inside-positive-outside",
+  "maxDistance": 1,
+  "insideVoxelCount": 266200,
+  "outsideVoxelCount": 782376,
+  "minimumDistance": -0.0545,
+  "maximumDistance": 0.2874360934407857
+}

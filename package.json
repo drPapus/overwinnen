@@ -1,0 +1,12 @@
+{
+  "name": "aim-gym-landing",
+  "private": true,
+  "scripts": {
+    "generate:collision-volume": "node scripts/generateCollisionVolume.js",
+    "generate:human-sdf": "node scripts/generateHumanSDF.js",
+    "validate:seo": "node scripts/validate-seo.js"
+  },
+  "devDependencies": {
+    "three": "0.180.0"
+  }
+}
