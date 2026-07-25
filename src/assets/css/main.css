@@ -303,7 +303,7 @@ a {
   height: 100%;
   display: block;
   z-index: 0;
-  background-color: #090d14;
+  background: transparent;
   pointer-events: auto;
 }
 
@@ -433,6 +433,10 @@ a {
   grid-template-columns: minmax(0, 1fr) minmax(420px, 0.86fr);
   gap: 56px;
   align-items: center;
+}
+
+.hero-visual {
+  display: none;
 }
 
 .hero-content,
@@ -1634,5 +1638,363 @@ a {
 
   .about-highlights {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Dedicated hero compositions below the approved desktop breakpoint. */
+@media (max-width: 1023px) {
+  .hero-section {
+    min-height: auto;
+    overflow: hidden;
+  }
+
+  .hero-section > .container {
+    width: 100%;
+  }
+
+  .hero-layout {
+    display: grid;
+    align-items: start;
+  }
+
+  .hero-visual {
+    position: relative;
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .hero-visual #hero-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: transparent;
+    transform: none;
+    transform-origin: center;
+  }
+
+  .aim-connections {
+    display: none;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 3;
+  }
+
+  .hero-actions {
+    max-width: 100%;
+  }
+
+  .hero-actions .btn-primary,
+  .hero-actions .btn-secondary {
+    min-height: 56px;
+  }
+
+  .hero-trust {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 28px;
+  }
+
+  .aim-card-stage {
+    pointer-events: auto;
+  }
+
+  .aim-card-position,
+  .aim-card-position--assessment,
+  .aim-card-position--adaptation,
+  .aim-card-position--performance,
+  .aim-card-position--recovery {
+    transform: none;
+  }
+}
+
+/* Tablet: copy and visual share the first row; method pillars sit below. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hero-section {
+    padding: 132px 0 64px;
+  }
+
+  .hero-layout {
+    grid-template-columns: minmax(0, 0.95fr) minmax(340px, 1.05fr);
+    gap: 30px 24px;
+  }
+
+  .hero-content {
+    padding-left: max(24px, calc((100vw - 1120px) / 2));
+    transform: none;
+  }
+
+  .hero-content h1.hero-subtitle {
+    margin-top: 44px;
+    font-size: clamp(2.2rem, 4.8vw, 3.25rem);
+  }
+
+  .hero-slogan {
+    margin-top: 24px;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    margin-top: 32px;
+  }
+
+  .hero-trust {
+    width: 100%;
+    margin-top: 32px;
+  }
+
+  .hero-visual {
+    height: clamp(520px, 68vw, 690px);
+  }
+
+  .aim-card-stage {
+    position: relative;
+    inset: auto;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-height: 0;
+    padding: 0 24px;
+    gap: 14px;
+  }
+
+  .aim-card-position,
+  .aim-card-position--assessment,
+  .aim-card-position--adaptation,
+  .aim-card-position--performance,
+  .aim-card-position--recovery {
+    position: relative;
+    inset: auto;
+  }
+
+  .aim-card-float {
+    animation: none;
+  }
+
+  .aim-glass-card {
+    width: 100%;
+    height: auto;
+    min-height: 112px;
+    border-radius: 24px;
+  }
+}
+
+/* Mobile portrait: a deliberate vertical sequence with an isolated model. */
+@media (max-width: 767px) and (orientation: portrait) {
+  .hero-section {
+    padding: 104px 0 48px;
+  }
+
+  .hero-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .hero-content {
+    width: 100%;
+    padding-inline: 20px;
+  }
+
+  .hero-content::after {
+    display: none;
+  }
+
+  .hero-content h1.hero-subtitle {
+    margin-top: 42px;
+    font-size: clamp(2.4rem, 9vw, 3.6rem);
+    line-height: 0.98;
+  }
+
+  .hero-slogan {
+    margin-top: 22px;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    margin: 30px 0 0;
+    gap: 12px;
+  }
+
+  .hero-actions .btn-primary,
+  .hero-actions .btn-secondary {
+    max-width: none;
+  }
+
+  .hero-trust {
+    width: 100%;
+    max-width: none;
+    margin: 30px 0 0;
+  }
+
+  .hero-visual {
+    width: 100%;
+    height: clamp(430px, 110vw, 590px);
+    margin-top: 26px;
+  }
+
+  .aim-card-stage {
+    position: relative;
+    inset: auto;
+    display: flex;
+    width: 100%;
+    min-height: 0;
+    margin: 24px 0 0;
+    padding: 2px 20px 14px;
+    gap: 14px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 20px;
+    scrollbar-width: none;
+  }
+
+  .aim-card-stage::-webkit-scrollbar {
+    display: none;
+  }
+
+  .aim-card-position,
+  .aim-card-position--assessment,
+  .aim-card-position--adaptation,
+  .aim-card-position--performance,
+  .aim-card-position--recovery {
+    flex: 0 0 min(78vw, 300px);
+    scroll-snap-align: center;
+  }
+
+  .aim-glass-card {
+    width: 100%;
+    height: 142px;
+    min-width: 0;
+    border-radius: 24px;
+  }
+}
+
+@media (max-width: 767px) and (max-height: 760px) and (orientation: portrait) {
+  .hero-visual {
+    height: 430px;
+  }
+}
+
+@media (max-width: 767px) and (min-height: 850px) and (orientation: portrait) {
+  .hero-visual {
+    height: 520px;
+  }
+}
+
+@media (min-width: 540px) and (max-width: 767px) and (orientation: portrait) {
+  .hero-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Short landscape phones use a compact split instead of portrait stacking. */
+@media (max-height: 600px) and (orientation: landscape) and (max-width: 1023px) {
+  .hero-section {
+    padding: 88px 0 24px;
+  }
+
+  .hero-layout {
+    grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+    align-items: center;
+    gap: 12px 20px;
+  }
+
+  .hero-content {
+    padding-left: 20px;
+    transform: none;
+  }
+
+  .hero-content .eyebrow {
+    margin-bottom: 8px;
+  }
+
+  .hero-content h1.hero-subtitle {
+    margin-top: 8px;
+    font-size: clamp(1.75rem, 4.4vw, 2.65rem);
+  }
+
+  .hero-slogan {
+    margin-top: 12px;
+    font-size: 0.95rem;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 16px;
+    gap: 10px;
+  }
+
+  .hero-actions .btn-primary,
+  .hero-actions .btn-secondary {
+    min-height: 48px;
+    padding: 9px 12px;
+  }
+
+  .hero-trust {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 16px;
+    gap: 10px;
+  }
+
+  .hero-trust-value,
+  .hero-trust-value--check {
+    font-size: 20px;
+  }
+
+  .hero-trust-item > span {
+    font-size: 10px;
+  }
+
+  .hero-visual {
+    height: calc(100svh - 88px - 24px);
+    min-height: 360px;
+  }
+
+  .aim-card-stage {
+    position: relative;
+    inset: auto;
+    display: flex;
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0 20px 6px;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+
+  .aim-card-position,
+  .aim-card-position--assessment,
+  .aim-card-position--adaptation,
+  .aim-card-position--performance,
+  .aim-card-position--recovery {
+    position: relative;
+    inset: auto;
+    flex: 0 0 220px;
+    scroll-snap-align: center;
+  }
+
+  .aim-card-float {
+    animation: none;
+  }
+
+  .aim-glass-card {
+    width: 100%;
+    height: 92px;
+    min-width: 0;
+    padding: 12px;
+    border-radius: 20px;
   }
 }

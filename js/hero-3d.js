@@ -13,7 +13,6 @@ import {
   createSphereFresnelMaterial,
   createStudioBackgroundMaterial,
   createStudioCycloramaMaterial,
-  STUDIO_COLOR,
 } from "../src/materials/index.js";
 
 const AIM_QUALITY_PRESETS = {
@@ -313,6 +312,8 @@ function createStudioCyclorama() {
   group.add(background, cyclorama);
   return {
     group,
+    background,
+    cyclorama,
     cycloramaGeometry,
     cycloramaMaterial,
     backgroundGeometry,
@@ -364,6 +365,7 @@ function setupSphereLighting(scene) {
 
 const hero = document.querySelector(".hero-section");
 const canvas = document.querySelector("#hero-canvas");
+const heroVisual = document.querySelector(".hero-visual");
 
 const cardPositions = document.querySelectorAll(".aim-card-position");
 const cardMotionQuery = window.matchMedia("(min-width: 721px) and (prefers-reduced-motion: no-preference)");
@@ -397,8 +399,8 @@ hero?.addEventListener("pointermove", updateCardParallax, { passive: true });
 hero?.addEventListener("pointerleave", resetCardParallax);
 
 if (hero && canvas) {
+  const desktopCanvasAnchor = canvas.nextSibling;
   const scene = new THREE.Scene();
-  scene.background = STUDIO_COLOR;
   const camera = new THREE.PerspectiveCamera(
     75,
     hero.clientWidth / hero.clientHeight,
@@ -407,9 +409,11 @@ if (hero && canvas) {
   );
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    alpha: true,
     antialias: true,
+    alpha: true,
+    powerPreference: "high-performance",
   });
+  renderer.setClearColor(0x000000, 0);
   const qualityName = selectAimQuality(renderer);
   const quality = AIM_QUALITY_PRESETS[qualityName];
   const developmentMode =
@@ -424,7 +428,40 @@ if (hero && canvas) {
   renderer.setPixelRatio(
     Math.min(window.devicePixelRatio, quality.pixelRatioCap),
   );
-  renderer.setSize(hero.clientWidth, hero.clientHeight, false);
+  function getLayoutMode() {
+    if (window.matchMedia("(min-width: 1024px)").matches) return "desktop";
+    if (
+      window.matchMedia(
+        "(max-height: 600px) and (orientation: landscape)",
+      ).matches
+    ) {
+      return "mobileLandscape";
+    }
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      return "mobilePortrait";
+    }
+    return "tablet";
+  }
+
+  function syncCanvasRegion() {
+    const mode = getLayoutMode();
+    const target = mode === "desktop" ? hero : heroVisual;
+    if (target && canvas.parentElement !== target) {
+      if (mode === "desktop") {
+        hero.insertBefore(canvas, desktopCanvasAnchor);
+      } else {
+        target.append(canvas);
+      }
+    }
+    return { mode, target: target || hero };
+  }
+
+  let layoutState = syncCanvasRegion();
+  renderer.setSize(
+    layoutState.target.clientWidth,
+    layoutState.target.clientHeight,
+    false,
+  );
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.75;
@@ -437,6 +474,7 @@ if (hero && canvas) {
   scene.add(studio.group);
 
   let model = null;
+  let modelFrame = null;
   let blockHuman = null;
   const glassSphereGroup = new THREE.Group();
   const sphereGeometry = new THREE.SphereGeometry(0.35, 128, 96);
@@ -562,6 +600,12 @@ if (hero && canvas) {
         const center = bounds.getCenter(new THREE.Vector3());
         sourceModel.position.x -= center.x;
         sourceModel.position.y -= bounds.min.y;
+        sourceModel.updateMatrixWorld(true);
+        const fittedBounds = new THREE.Box3().setFromObject(sourceModel);
+        modelFrame = {
+          center: fittedBounds.getCenter(new THREE.Vector3()),
+          size: fittedBounds.getSize(new THREE.Vector3()),
+        };
         glassSphereGroup.position.set(0, center.y - bounds.min.y, -center.z);
         groundingEffects.position.z = -center.z;
       },
@@ -576,6 +620,7 @@ if (hero && canvas) {
       .load()
       .then(() => {
         model = blockHuman.sourceRoot;
+        applyResponsiveSceneLayout(layoutState.mode);
         blockHuman.setVisible(heroVisible);
         blockHuman.startSimulation({ autoActivate: true });
         finalizeSphereReflection();
@@ -609,6 +654,48 @@ if (hero && canvas) {
   setupSphereLighting(scene);
 
   camera.position.set(-0.2, 0.35, 0.7);
+
+  function fitMobilePortraitCamera() {
+    if (!modelFrame || !layoutState.target) {
+      camera.position.set(0, 0.25, 0.674);
+      return;
+    }
+
+    const { center, size } = modelFrame;
+    const occupancy = 0.74;
+    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+    const horizontalFov =
+      2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
+    const verticalDistance =
+      size.y / (2 * Math.tan(verticalFov / 2) * occupancy);
+    const horizontalDistance =
+      size.x / (2 * Math.tan(horizontalFov / 2) * 0.72);
+    const distance = Math.max(verticalDistance, horizontalDistance);
+
+    // A small right/down composition bias leaves room for particle activity.
+    camera.position.set(
+      center.x - size.x * 0.05,
+      center.y + size.y * 0.08,
+      center.z + distance,
+    );
+  }
+
+  function applyResponsiveSceneLayout(mode) {
+    studio.background.visible = mode === "desktop";
+    studio.cyclorama.visible = mode === "desktop";
+    if (mode === "desktop") {
+      camera.position.set(-0.2, 0.35, 0.7);
+    } else if (mode === "mobilePortrait") {
+      fitMobilePortraitCamera();
+    } else if (mode === "mobileLandscape") {
+      camera.position.set(0.1, 0.31, 0.826);
+    } else {
+      camera.position.set(0.04, 0.31, 0.77);
+    }
+    camera.updateProjectionMatrix();
+  }
+
+  applyResponsiveSceneLayout(layoutState.mode);
 
   loadModel();
   let animationFrameId = null;
@@ -698,8 +785,9 @@ if (hero && canvas) {
   function applyResize() {
     resizeFrameId = 0;
     if (isDisposed) return;
-    const width = hero.clientWidth;
-    const height = hero.clientHeight;
+    layoutState = syncCanvasRegion();
+    const width = layoutState.target.clientWidth;
+    const height = layoutState.target.clientHeight;
 
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
@@ -707,7 +795,7 @@ if (hero && canvas) {
       Math.min(window.devicePixelRatio, quality.pixelRatioCap),
     );
     renderer.setSize(width, height, false);
-
+    applyResponsiveSceneLayout(layoutState.mode);
   }
 
   function resize() {
@@ -750,6 +838,7 @@ if (hero && canvas) {
 
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(hero);
+  if (heroVisual) resizeObserver.observe(heroVisual);
 
   const intersectionObserver = new IntersectionObserver(
     ([entry]) => {
