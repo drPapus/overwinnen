@@ -57,7 +57,7 @@ const HERO_MODEL_PRESETS = {
   desktop: {
     rootScaleMultiplier: 1,
     positionX: 0,
-    positionY: 0,
+    positionY: 0.14,
     cameraDistanceMultiplier: 1,
     occupancy: null,
   },
@@ -898,7 +898,7 @@ if (hero && canvas) {
     } else if (mode === "mobileLandscape") {
       camera.position.set(0.1, 0.31, 0.826);
     } else {
-      camera.position.set(0.04, 0.31, 0.77);
+      camera.position.set(0.03, 0.31, 0.77);
     }
     camera.updateProjectionMatrix();
   }

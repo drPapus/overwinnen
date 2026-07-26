@@ -441,13 +441,19 @@ a {
 
 @media (min-width: 1024px) {
   .hero-visual {
+    --desktop-canvas-extension: clamp(120px, 10vw, 200px);
     position: relative;
     display: block;
     grid-column: 2;
     grid-row: 1;
     align-self: center;
     justify-self: stretch;
-    width: min(100%, 58vw, 900px);
+    width: min(
+      calc(100% + var(--desktop-canvas-extension)),
+      68vw,
+      900px
+    );
+    margin-left: calc(-1 * var(--desktop-canvas-extension));
     min-width: 0;
     height: min(820px, calc(100svh - 100px));
     overflow: hidden;
