@@ -30,7 +30,7 @@ const AIM_QUALITY_PRESETS = {
   },
   medium: {
     particleCount: 4096,
-    pixelRatioCap: 1.25,
+    pixelRatioCap: 1.15,
     particleCollisions: false,
     collisionGrid: 32,
     collisionRebuildEvery: 2,
@@ -40,9 +40,9 @@ const AIM_QUALITY_PRESETS = {
     bloom: false,
   },
   low: {
-    // The current simulation layout remains 64x64 to preserve the approved
-    // distribution. This tier removes optional work before reducing particles.
-    particleCount: 4096,
+    // Keep the shader-friendly 64x64 state texture, but only activate and draw
+    // half of it on the touch-first automatic tier.
+    particleCount: 2048,
     pixelRatioCap: 1,
     particleCollisions: false,
     collisionGrid: 32,
@@ -407,9 +407,14 @@ if (hero && canvas) {
     0.1,
     1000,
   );
+  const touchFirst =
+    window.matchMedia("(pointer: coarse)").matches ||
+    !window.matchMedia("(hover: hover)").matches;
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: true,
+    // Avoid allocating a multisampled default framebuffer for the automatic
+    // touch-first path. Desktop keeps the approved antialiasing.
+    antialias: !touchFirst,
     alpha: true,
     powerPreference: "high-performance",
   });
@@ -425,8 +430,13 @@ if (hero && canvas) {
     developmentMode,
   );
 
+  const mobilePixelRatioCap =
+    qualityName === "medium" ? 1.15 : 1.0;
+  const pixelRatioCap = touchFirst
+    ? mobilePixelRatioCap
+    : quality.pixelRatioCap;
   renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio, quality.pixelRatioCap),
+    Math.min(window.devicePixelRatio, pixelRatioCap),
   );
   function getLayoutMode() {
     if (window.matchMedia("(min-width: 1024px)").matches) return "desktop";
@@ -567,6 +577,7 @@ if (hero && canvas) {
       modelUrl: "./src/assets/models/aim-human.glb",
       sdfUrl: "./src/assets/models/aim-human-sdf.bin",
       sdfMetadataUrl: "./src/assets/models/aim-human-sdf.json",
+      particleCount: touchFirst ? 2048 : 4096,
       collisionUrl:
         "./src/assets/collision/floor-collision-volume.bin",
       collisionMetadataUrl:
@@ -575,7 +586,11 @@ if (hero && canvas) {
         // Keep the production default off: this avoids the voxel-key, bitonic
         // sort, range, neighbor-correction, and velocity-correction passes.
         enabled: false,
-        quality: qualityName === "high" ? "desktop" : "mobile",
+        quality: "off",
+      },
+      simulation: {
+        simulationSubsteps: touchFirst ? 1 : quality.simulationSubsteps,
+        mobileSimulationInterval: 1 / 30,
       },
       interaction: {
         mode: "auto",
@@ -603,7 +618,8 @@ if (hero && canvas) {
       innerCrystalDebugMode:
         debugParameters.get("innerCrystalDebug") ||
         "crystal+particles",
-      visualQuality: quality.physicalMaterial ? "desktop" : "mobile",
+      visualQuality:
+        touchFirst || !quality.physicalMaterial ? "mobile" : "desktop",
       performanceProfiler: pipelineProfiler,
       visual: {
         preset: "dark-crystal-metal",
@@ -807,7 +823,7 @@ if (hero && canvas) {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio, quality.pixelRatioCap),
+      Math.min(window.devicePixelRatio, pixelRatioCap),
     );
     renderer.setSize(width, height, false);
     applyResponsiveSceneLayout(layoutState.mode);
@@ -833,7 +849,7 @@ if (hero && canvas) {
       renderTargets: particleReport?.renderTargets || [],
       approximateTextureMemoryBytes:
         particleReport?.approximateTextureMemoryBytes || 0,
-      particleCount: quality.particleCount,
+      particleCount: particleReport?.particleCount || quality.particleCount,
       pixelRatio: renderer.getPixelRatio(),
       approximateFrameTimeMs: Number(frameTimeAverage.toFixed(2)),
       particleCollisionsEnabled:

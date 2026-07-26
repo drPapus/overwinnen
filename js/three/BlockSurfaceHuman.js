@@ -23,6 +23,7 @@ const DEFAULT_SIMULATION = {
   maxSpeed: 0.55,
   activationDuration: 4,
   simulationSubsteps: 1,
+  mobileSimulationInterval: 1 / 30,
 };
 const DEFAULT_SDF = {
   enabled: true,
@@ -259,6 +260,10 @@ out vec4 outColor;
 
 void main() {
   vec4 positionSample = texture(uPositionTexture, vUv);
+  if (positionSample.a < 0.5) {
+    outColor = positionSample;
+    return;
+  }
   vec3 velocity = texture(uVelocityTexture, vUv).xyz;
   vec3 position = positionSample.xyz +
     velocity * uDeltaTime * uActivation;
@@ -1249,6 +1254,11 @@ float sampleSdf(vec3 worldPosition) {
 }
 
 void main() {
+  vec4 basePositionSample = texture(uBasePositionTexture, vUv);
+  if (basePositionSample.a < 0.5) {
+    outColor = vec4(0.0);
+    return;
+  }
   vec3 position = texture(uPositionTexture, vUv).xyz;
   vec4 velocitySample = texture(uVelocityTexture, vUv);
   vec3 velocity = velocitySample.xyz;
@@ -1757,7 +1767,7 @@ function calculateWorldSurfaceArea(mesh) {
   return area;
 }
 
-function allocateInstances(entries) {
+function allocateInstances(entries, instanceCount = INSTANCE_COUNT) {
   const totalArea = entries.reduce((sum, entry) => sum + entry.area, 0);
   if (!Number.isFinite(totalArea) || totalArea <= 0) {
     throw new Error("[BlockSurfaceHuman] Model has no sampleable surface area.");
@@ -1766,7 +1776,7 @@ function allocateInstances(entries) {
   // Largest-remainder allocation keeps coverage proportional and totals exact.
   let assigned = 0;
   entries.forEach((entry) => {
-    const exactCount = (entry.area / totalArea) * INSTANCE_COUNT;
+    const exactCount = (entry.area / totalArea) * instanceCount;
     entry.count = Math.floor(exactCount);
     entry.remainder = exactCount - entry.count;
     assigned += entry.count;
@@ -1774,7 +1784,7 @@ function allocateInstances(entries) {
   entries
     .slice()
     .sort((a, b) => b.remainder - a.remainder)
-    .slice(0, INSTANCE_COUNT - assigned)
+    .slice(0, instanceCount - assigned)
     .forEach((entry) => {
       entry.count += 1;
     });
@@ -1795,6 +1805,7 @@ export class BlockSurfaceHuman {
   constructor({
     scene,
     modelUrl,
+    particleCount = INSTANCE_COUNT,
     blockSize = 0.018,
     material = null,
     prepareModel = null,
@@ -1839,6 +1850,11 @@ export class BlockSurfaceHuman {
   }) {
     this.scene = scene;
     this.modelUrl = modelUrl;
+    this.particleCount = THREE.MathUtils.clamp(
+      Math.floor(particleCount),
+      1,
+      INSTANCE_COUNT,
+    );
     this.blockSize = blockSize;
     this.material = material;
     this.prepareModel = prepareModel;
@@ -2043,6 +2059,7 @@ export class BlockSurfaceHuman {
     this._particleCollisionFrame = 0;
     this._simulationPassesCurrentFrame = 0;
     this._simulationPassesLastFrame = 0;
+    this.simulationAccumulator = 0;
     this._scaleSettleElapsed = 0;
     this._particleVoxelDataValid = false;
     this.predictedPositionTarget = null;
@@ -2393,7 +2410,7 @@ export class BlockSurfaceHuman {
       });
     });
     const crystalConfig = this.innerCrystalConfig;
-    this.innerGlassMaterial = new THREE.MeshPhysicalMaterial({
+    const innerMaterialOptions = {
       color: new THREE.Color(crystalConfig.color),
       metalness: THREE.MathUtils.clamp(
         crystalConfig.metalness,
@@ -2405,23 +2422,29 @@ export class BlockSurfaceHuman {
         0,
         1,
       ),
-      clearcoat: THREE.MathUtils.clamp(
-        crystalConfig.clearcoat,
-        0,
-        1,
-      ),
-      clearcoatRoughness: THREE.MathUtils.clamp(
-        crystalConfig.clearcoatRoughness,
-        0,
-        1,
-      ),
       envMapIntensity: Math.max(0, crystalConfig.envMapIntensity),
       transparent: false,
       opacity: 1,
       depthTest: crystalConfig.depthTest !== false,
       depthWrite: true,
       side: THREE.FrontSide,
-    });
+    };
+    this.innerGlassMaterial =
+      this.visualQuality === "mobile"
+        ? new THREE.MeshStandardMaterial(innerMaterialOptions)
+        : new THREE.MeshPhysicalMaterial({
+            ...innerMaterialOptions,
+            clearcoat: THREE.MathUtils.clamp(
+              crystalConfig.clearcoat,
+              0,
+              1,
+            ),
+            clearcoatRoughness: THREE.MathUtils.clamp(
+              crystalConfig.clearcoatRoughness,
+              0,
+              1,
+            ),
+          });
     this.innerGlassMaterial.name =
       "BlockSurfaceHuman.InnerMetal";
 
@@ -2498,7 +2521,7 @@ export class BlockSurfaceHuman {
       throw new Error("[BlockSurfaceHuman] No valid mesh surfaces were found.");
     }
 
-    allocateInstances(entries);
+    allocateInstances(entries, this.particleCount);
     this.sourceMeshes = entries.map((entry) => entry.mesh);
     this.humanVisibleMeshes = [...this.sourceMeshes];
     this.humanRaycastMeshes = [...this.sourceMeshes];
@@ -2519,7 +2542,7 @@ export class BlockSurfaceHuman {
     this.instancedMesh = new THREE.InstancedMesh(
       this.geometry,
       this.material,
-      INSTANCE_COUNT,
+      this.particleCount,
     );
     this.instancedMesh.name = "BlockSurfaceHuman";
     this.instancedMesh.visible =
@@ -2601,9 +2624,9 @@ export class BlockSurfaceHuman {
       if (samplingGeometry !== mesh.geometry) samplingGeometry.dispose();
     });
 
-    if (instanceIndex !== INSTANCE_COUNT) {
+    if (instanceIndex !== this.particleCount) {
       throw new Error(
-        `[BlockSurfaceHuman] Expected ${INSTANCE_COUNT} instances, created ${instanceIndex}.`,
+        `[BlockSurfaceHuman] Expected ${this.particleCount} instances, created ${instanceIndex}.`,
       );
     }
 
@@ -3039,7 +3062,7 @@ export class BlockSurfaceHuman {
 
   initializeParticleCollisions() {
     const quality = this.particleCollisionConfig.quality;
-    if (quality === "off") {
+    if (!this.particleCollisionConfig.enabled || quality === "off") {
       this.particleCollisionInfluence = 0;
       return;
     }
@@ -3350,7 +3373,7 @@ export class BlockSurfaceHuman {
   initializeSimulation(bodyCenter) {
     const initialVelocityData = new Float32Array(INSTANCE_COUNT * 4);
     const random = createSeededRandom(0x41c6ce57);
-    for (let index = 0; index < INSTANCE_COUNT; index += 1) {
+    for (let index = 0; index < this.particleCount; index += 1) {
       initialVelocityData[index * 4 + 3] = random();
     }
     this.initialVelocityTexture = new THREE.DataTexture(
@@ -3794,7 +3817,7 @@ export class BlockSurfaceHuman {
     if (this.debugSimulation) {
       debugLog("[BlockSurfaceHuman] GPU simulation initialized", {
         resolution: "64x64",
-        particles: INSTANCE_COUNT,
+        particles: this.particleCount,
         positionTargets: 2,
         velocityTargets: 2,
         pingPong: true,
@@ -4510,7 +4533,7 @@ export class BlockSurfaceHuman {
       return;
     }
 
-    const safeDeltaTime = Math.min(
+    let safeDeltaTime = Math.min(
       Math.max(Number.isFinite(deltaTime) ? deltaTime : 0, 0),
       1 / 30,
     );
@@ -4519,6 +4542,19 @@ export class BlockSurfaceHuman {
       this.automaticInteractionEnabled &&
       this.effectVisible &&
       this.simulationRunning;
+    if (automaticInteractionActive) {
+      const simulationInterval = Math.max(
+        1 / 120,
+        this.simulationConfig.mobileSimulationInterval,
+      );
+      this.simulationAccumulator += safeDeltaTime;
+      if (this.simulationAccumulator < simulationInterval) return;
+      // Never perform catch-up steps after a delayed frame.
+      safeDeltaTime = Math.min(this.simulationAccumulator, 1 / 20);
+      this.simulationAccumulator = 0;
+    } else {
+      this.simulationAccumulator = 0;
+    }
     if (automaticInteractionActive) {
       this.updateAutomaticInteraction(safeDeltaTime);
     } else if (
@@ -4576,7 +4612,9 @@ export class BlockSurfaceHuman {
     const particleCollisionsActive =
       this.particleCollisionInfluence > 0 &&
       Boolean(this.particleCollisionPositionMaterial);
-    const substepCount = particleCollisionsActive
+    const substepCount = automaticInteractionActive
+      ? 1
+      : particleCollisionsActive
       ? this.particleCollisionSubsteps
       : THREE.MathUtils.clamp(
           Math.floor(this.collisionConfig.substeps),
@@ -4672,7 +4710,7 @@ export class BlockSurfaceHuman {
       0,
     );
     return {
-      particleCount: INSTANCE_COUNT,
+      particleCount: this.particleCount,
       interactionMode: this.resolvedInteractionMode,
       automaticInteractionEnabled:
         this.automaticInteractionEnabled,
