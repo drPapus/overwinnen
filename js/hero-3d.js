@@ -54,6 +54,44 @@ const AIM_QUALITY_PRESETS = {
   },
 };
 
+const HERO_MODEL_PRESETS = {
+  desktop: {
+    rootScaleMultiplier: 1,
+    positionX: 0,
+    positionY: 0,
+    cameraDistanceMultiplier: 1,
+    occupancy: null,
+  },
+  mobilePortrait: {
+    rootScaleMultiplier: 1,
+    positionX: 0,
+    positionY: 0,
+    cameraDistanceMultiplier: 1,
+    occupancy: 0.74,
+  },
+  largeMobilePortrait: {
+    rootScaleMultiplier: 1.22,
+    positionX: 0.05,
+    positionY: -0.02,
+    cameraDistanceMultiplier: 0.9,
+    occupancy: 0.74,
+  },
+  mobileLandscape: {
+    rootScaleMultiplier: 1,
+    positionX: 0,
+    positionY: 0,
+    cameraDistanceMultiplier: 1,
+    occupancy: null,
+  },
+  tablet: {
+    rootScaleMultiplier: 1,
+    positionX: 0,
+    positionY: 0,
+    cameraDistanceMultiplier: 1,
+    occupancy: null,
+  },
+};
+
 function selectAimQuality(renderer) {
   const requested = new URLSearchParams(window.location.search).get(
     "aimQuality",
@@ -399,7 +437,6 @@ hero?.addEventListener("pointermove", updateCardParallax, { passive: true });
 hero?.addEventListener("pointerleave", resetCardParallax);
 
 if (hero && canvas) {
-  const desktopCanvasAnchor = canvas.nextSibling;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(
     75,
@@ -410,14 +447,28 @@ if (hero && canvas) {
   const touchFirst =
     window.matchMedia("(pointer: coarse)").matches ||
     !window.matchMedia("(hover: hover)").matches;
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    // Avoid allocating a multisampled default framebuffer for the automatic
-    // touch-first path. Desktop keeps the approved antialiasing.
-    antialias: !touchFirst,
-    alpha: true,
-    powerPreference: "high-performance",
-  });
+  let renderer = null;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      // Avoid allocating a multisampled default framebuffer for the automatic
+      // touch-first path. Desktop keeps the approved antialiasing.
+      antialias: !touchFirst,
+      alpha: true,
+      powerPreference: "high-performance",
+    });
+  } catch (error) {
+    canvas.style.display = "none";
+    if (heroVisual) {
+      heroVisual.style.background =
+        "center / contain no-repeat url('./src/assets/images/aim-hero-visual.png')";
+    }
+    console.error(
+      "[AIM Hero] WebGL renderer creation failed; static fallback active.",
+      error,
+    );
+  }
+  if (renderer) {
   renderer.setClearColor(0x000000, 0);
   const qualityName = selectAimQuality(renderer);
   const quality = AIM_QUALITY_PRESETS[qualityName];
@@ -439,13 +490,28 @@ if (hero && canvas) {
     Math.min(window.devicePixelRatio, pixelRatioCap),
   );
   function getLayoutMode() {
-    if (window.matchMedia("(min-width: 1024px)").matches) return "desktop";
+    if (
+      window.matchMedia("(min-width: 1024px)").matches &&
+      !touchFirst
+    ) {
+      return "desktop";
+    }
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      return "tabletWide";
+    }
     if (
       window.matchMedia(
         "(max-height: 600px) and (orientation: landscape)",
       ).matches
     ) {
       return "mobileLandscape";
+    }
+    if (
+      window.matchMedia(
+        "(min-width: 600px) and (max-width: 899px) and (orientation: portrait)",
+      ).matches
+    ) {
+      return "largeMobilePortrait";
     }
     if (window.matchMedia("(max-width: 767px)").matches) {
       return "mobilePortrait";
@@ -455,23 +521,27 @@ if (hero && canvas) {
 
   function syncCanvasRegion() {
     const mode = getLayoutMode();
-    const target = mode === "desktop" ? hero : heroVisual;
+    const target = heroVisual;
     if (target && canvas.parentElement !== target) {
-      if (mode === "desktop") {
-        hero.insertBefore(canvas, desktopCanvasAnchor);
-      } else {
-        target.append(canvas);
-      }
+      target.append(canvas);
     }
     return { mode, target: target || hero };
   }
 
   let layoutState = syncCanvasRegion();
+  const initialVisualRect =
+    layoutState.target.getBoundingClientRect();
+  camera.aspect =
+    Math.max(1, initialVisualRect.width) /
+    Math.max(1, initialVisualRect.height);
+  camera.updateProjectionMatrix();
   renderer.setSize(
-    layoutState.target.clientWidth,
-    layoutState.target.clientHeight,
+    Math.round(initialVisualRect.width),
+    Math.round(initialVisualRect.height),
     false,
   );
+  let lastRendererWidth = Math.round(initialVisualRect.width);
+  let lastRendererHeight = Math.round(initialVisualRect.height);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.75;
@@ -659,6 +729,7 @@ if (hero && canvas) {
           console.info("AIM block human model loaded successfully.");
           console.info("AIM hero performance", getPerformanceReport());
         }
+        publishHeroDiagnosticReport();
       })
       .catch((error) => {
         console.error("Failed to load AIM block human model.", error);
@@ -686,38 +757,117 @@ if (hero && canvas) {
 
   camera.position.set(-0.2, 0.35, 0.7);
 
-  function fitMobilePortraitCamera() {
+  function fitMobilePortraitCamera(preset) {
     if (!modelFrame || !layoutState.target) {
       camera.position.set(0, 0.25, 0.674);
       return;
     }
 
     const { center, size } = modelFrame;
-    const occupancy = 0.74;
+    const occupancy = preset.occupancy;
+    const scaleMultiplier = preset.rootScaleMultiplier;
+    const scaledCenterX =
+      center.x * scaleMultiplier + preset.positionX;
+    const scaledCenterY =
+      center.y * scaleMultiplier + preset.positionY;
+    const scaledCenterZ = center.z * scaleMultiplier;
+    const scaledWidth = size.x * scaleMultiplier;
+    const scaledHeight = size.y * scaleMultiplier;
     const verticalFov = THREE.MathUtils.degToRad(camera.fov);
     const horizontalFov =
       2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
     const verticalDistance =
-      size.y / (2 * Math.tan(verticalFov / 2) * occupancy);
+      scaledHeight / (2 * Math.tan(verticalFov / 2) * occupancy);
     const horizontalDistance =
-      size.x / (2 * Math.tan(horizontalFov / 2) * 0.72);
-    const distance = Math.max(verticalDistance, horizontalDistance);
+      scaledWidth / (2 * Math.tan(horizontalFov / 2) * 0.72);
+    const distance =
+      Math.max(verticalDistance, horizontalDistance) *
+      preset.cameraDistanceMultiplier;
 
     // A small right/down composition bias leaves room for particle activity.
     camera.position.set(
-      center.x - size.x * 0.05,
-      center.y + size.y * 0.08,
-      center.z + distance,
+      scaledCenterX - scaledWidth * 0.05,
+      scaledCenterY + scaledHeight * 0.08,
+      scaledCenterZ + distance,
     );
   }
 
+  function fitDesktopCameraToVisualRegion() {
+    if (!modelFrame || !layoutState.target) {
+      camera.position.set(-0.2, 0.35, 0.7);
+      return;
+    }
+    const heroRect = hero.getBoundingClientRect();
+    const visualRect = layoutState.target.getBoundingClientRect();
+    if (
+      heroRect.width < 2 ||
+      heroRect.height < 2 ||
+      visualRect.width < 2 ||
+      visualRect.height < 2
+    ) {
+      return;
+    }
+
+    const center = modelFrame.center;
+    const baseX = -0.2;
+    const baseY = 0.35;
+    const baseZ = 0.7;
+    const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+    const oldDepth = Math.max(0.001, baseZ - center.z);
+    const oldAspect = heroRect.width / heroRect.height;
+    const oldNdcX =
+      (center.x - baseX) / (oldDepth * tangent * oldAspect);
+    const oldNdcY = (center.y - baseY) / (oldDepth * tangent);
+    const approvedScreenX =
+      heroRect.left + (oldNdcX + 1) * heroRect.width * 0.5;
+    const approvedScreenY =
+      heroRect.top + (1 - oldNdcY) * heroRect.height * 0.5;
+
+    // Scaling the camera-to-model vector by the drawing-height ratio keeps
+    // the model's projected pixel height unchanged.
+    const distanceScale = visualRect.height / heroRect.height;
+    camera.position.set(
+      center.x + (baseX - center.x) * distanceScale,
+      center.y + (baseY - center.y) * distanceScale,
+      center.z + (baseZ - center.z) * distanceScale,
+    );
+
+    const newDepth = Math.max(0.001, camera.position.z - center.z);
+    const newNdcX =
+      (center.x - camera.position.x) /
+      (newDepth * tangent * camera.aspect);
+    const newNdcY =
+      (center.y - camera.position.y) / (newDepth * tangent);
+    const currentScreenX =
+      visualRect.left + (newNdcX + 1) * visualRect.width * 0.5;
+    const currentScreenY =
+      visualRect.top + (1 - newNdcY) * visualRect.height * 0.5;
+    const worldUnitsPerPixel =
+      (2 * newDepth * tangent) / visualRect.height;
+    camera.position.x +=
+      (currentScreenX - approvedScreenX) * worldUnitsPerPixel;
+    camera.position.y -=
+      (currentScreenY - approvedScreenY) * worldUnitsPerPixel;
+  }
+
   function applyResponsiveSceneLayout(mode) {
+    const preset = HERO_MODEL_PRESETS[mode] || HERO_MODEL_PRESETS.tablet;
+    if (blockHuman?.sourceRoot) {
+      blockHuman.setVisualTransform({
+        scaleMultiplier: preset.rootScaleMultiplier,
+        positionX: preset.positionX,
+        positionY: preset.positionY,
+      });
+    }
     studio.background.visible = mode === "desktop";
     studio.cyclorama.visible = mode === "desktop";
     if (mode === "desktop") {
-      camera.position.set(-0.2, 0.35, 0.7);
-    } else if (mode === "mobilePortrait") {
-      fitMobilePortraitCamera();
+      fitDesktopCameraToVisualRegion();
+    } else if (
+      mode === "mobilePortrait" ||
+      mode === "largeMobilePortrait"
+    ) {
+      fitMobilePortraitCamera(preset);
     } else if (mode === "mobileLandscape") {
       camera.position.set(0.1, 0.31, 0.826);
     } else {
@@ -738,7 +888,27 @@ if (hero && canvas) {
   let lastMainRenderCalls = 0;
 
   function shouldRender() {
-    return heroVisible && documentActive && windowFocused && !isDisposed;
+    const state = getRenderState();
+    return (
+      state.heroVisible &&
+      state.documentVisible &&
+      state.rendererReady &&
+      state.containerHasSize &&
+      state.contextAvailable &&
+      !state.suspended
+    );
+  }
+
+  function getRenderState() {
+    const targetRect = layoutState.target.getBoundingClientRect();
+    return {
+      heroVisible,
+      documentVisible: documentActive,
+      rendererReady: Boolean(renderer),
+      containerHasSize: targetRect.width >= 2 && targetRect.height >= 2,
+      contextAvailable: !renderer.getContext().isContextLost(),
+      suspended: isDisposed || !windowFocused,
+    };
   }
 
   function animate(time) {
@@ -764,7 +934,17 @@ if (hero && canvas) {
     glassSphereGroup.scale.setScalar(sphereScale);
     modelRotationY += delta * 0.03;
     blockHuman?.setRotationY(modelRotationY);
-    blockHuman?.update(delta, activeElapsedTime);
+    if (blockHuman?.particleSystemAvailable) {
+      try {
+        blockHuman.update(delta, activeElapsedTime);
+      } catch (error) {
+        blockHuman.disableParticleSystem(error);
+        console.error(
+          "[AIM Hero] Particle runtime failed; metallic fallback active.",
+          error,
+        );
+      }
+    }
     if (pipelineProfiler) {
       pipelineProfiler.measure("mainSceneRender", () => {
         renderer.render(scene, camera);
@@ -817,15 +997,29 @@ if (hero && canvas) {
     resizeFrameId = 0;
     if (isDisposed) return;
     layoutState = syncCanvasRegion();
-    const width = layoutState.target.clientWidth;
-    const height = layoutState.target.clientHeight;
+    const visualRect = layoutState.target.getBoundingClientRect();
+    const width = Math.max(1, Math.round(visualRect.width));
+    const height = Math.max(1, Math.round(visualRect.height));
+    if (width < 2 || height < 2) return;
 
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio, pixelRatioCap),
+    const nextPixelRatio = Math.min(
+      window.devicePixelRatio,
+      pixelRatioCap,
     );
-    renderer.setSize(width, height, false);
+    const pixelRatioChanged =
+      renderer.getPixelRatio() !== nextPixelRatio;
+    if (
+      width !== lastRendererWidth ||
+      height !== lastRendererHeight ||
+      pixelRatioChanged
+    ) {
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(nextPixelRatio);
+      renderer.setSize(width, height, false);
+      lastRendererWidth = width;
+      lastRendererHeight = height;
+    }
     applyResponsiveSceneLayout(layoutState.mode);
   }
 
@@ -865,6 +1059,128 @@ if (hero && canvas) {
     };
   }
 
+  let diagnosticPublished = false;
+  function getProjectedHumanBounds() {
+    if (!blockHuman?.sourceRoot || !layoutState.target) return null;
+    blockHuman.visualRoot.updateWorldMatrix(true, true);
+    camera.updateMatrixWorld();
+    const bounds = new THREE.Box3().setFromObject(blockHuman.sourceRoot);
+    if (bounds.isEmpty()) return null;
+    const minimum = bounds.min;
+    const maximum = bounds.max;
+    const projected = new THREE.Vector3();
+    let minX = 1;
+    let minY = 1;
+    let maxX = -1;
+    let maxY = -1;
+    for (let corner = 0; corner < 8; corner += 1) {
+      projected
+        .set(
+          corner & 1 ? maximum.x : minimum.x,
+          corner & 2 ? maximum.y : minimum.y,
+          corner & 4 ? maximum.z : minimum.z,
+        )
+        .project(camera);
+      minX = Math.min(minX, projected.x);
+      minY = Math.min(minY, projected.y);
+      maxX = Math.max(maxX, projected.x);
+      maxY = Math.max(maxY, projected.y);
+    }
+    const rect = layoutState.target.getBoundingClientRect();
+    const left = THREE.MathUtils.clamp((minX + 1) * 0.5, 0, 1);
+    const right = THREE.MathUtils.clamp((maxX + 1) * 0.5, 0, 1);
+    const top = THREE.MathUtils.clamp((1 - maxY) * 0.5, 0, 1);
+    const bottom = THREE.MathUtils.clamp((1 - minY) * 0.5, 0, 1);
+    const width = Math.max(0, right - left) * rect.width;
+    const height = Math.max(0, bottom - top) * rect.height;
+    return {
+      left: Math.round(left * rect.width),
+      top: Math.round(top * rect.height),
+      width: Math.round(width),
+      height: Math.round(height),
+      canvasCoveragePercent: Number(
+        ((width * height * 100) / (rect.width * rect.height)).toFixed(2),
+      ),
+      coverageMethod: "projected human bounding-box proxy",
+    };
+  }
+
+  function getHeroDiagnosticReport() {
+    const gl = renderer.getContext();
+    const visualRect = layoutState.target.getBoundingClientRect();
+    const root = blockHuman?.visualRoot;
+    const capabilities = renderer.capabilities;
+    return {
+      userAgent: navigator.userAgent,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      },
+      visualContainer: {
+        width: Math.round(visualRect.width),
+        height: Math.round(visualRect.height),
+      },
+      devicePixelRatio: window.devicePixelRatio,
+      responsivePreset: layoutState.mode,
+      qualityTier: blockHuman?.particleSystemAvailable
+        ? qualityName
+        : "ipad-fallback",
+      interactionMode: blockHuman?.resolvedInteractionMode || null,
+      webglVersion: capabilities.isWebGL2 ? 2 : 1,
+      capabilities: {
+        maxTextureSize: capabilities.maxTextureSize,
+        maxVertexTextures: capabilities.maxVertexTextures,
+        floatTexture: Boolean(
+          capabilities.isWebGL2 ||
+          renderer.extensions.has("OES_texture_float"),
+        ),
+        halfFloatTexture: Boolean(
+          capabilities.isWebGL2 ||
+          renderer.extensions.has("OES_texture_half_float"),
+        ),
+        colorBufferFloat: renderer.extensions.has(
+          "EXT_color_buffer_float",
+        ),
+        colorBufferHalfFloat: renderer.extensions.has(
+          "EXT_color_buffer_half_float",
+        ),
+        simulationInternalFormat:
+          blockHuman?.simulationInternalFormat || null,
+      },
+      modelLoaded: Boolean(blockHuman?.sourceRoot),
+      particleSystemInitialized: Boolean(
+        blockHuman?.simulationInitialized,
+      ),
+      particleInitializationError:
+        blockHuman?.particleInitializationError?.message || null,
+      canvas: { width: canvas.width, height: canvas.height },
+      camera: {
+        aspect: camera.aspect,
+        near: camera.near,
+        far: camera.far,
+      },
+      commonRoot: root
+        ? {
+            scale: root.scale.toArray(),
+            position: root.position.toArray(),
+          }
+        : null,
+      projectedHumanBounds: getProjectedHumanBounds(),
+      shouldRender: shouldRender(),
+      renderState: getRenderState(),
+      heroIntersectionObserverState: heroVisible,
+      documentVisibilityState: document.visibilityState,
+    };
+  }
+
+  function publishHeroDiagnosticReport() {
+    if (!developmentMode || diagnosticPublished) return;
+    diagnosticPublished = true;
+    const report = getHeroDiagnosticReport();
+    window.__AIM_HERO_DEBUG__ = report;
+    console.info("[AIM Hero] Initialization diagnostics", report);
+  }
+
   if (developmentMode) window.getPerformanceReport = getPerformanceReport;
 
   const resizeObserver = new ResizeObserver(resize);
@@ -880,6 +1196,34 @@ if (hero && canvas) {
     { threshold: 0 },
   );
   intersectionObserver.observe(hero);
+
+  function showStaticFallback() {
+    canvas.style.visibility = "hidden";
+    if (heroVisual) {
+      heroVisual.style.background =
+        "center / contain no-repeat url('./src/assets/images/aim-hero-visual.png')";
+    }
+  }
+
+  function handleContextLost() {
+    stopRendering();
+    showStaticFallback();
+    console.error("[AIM Hero] WebGL context lost; static fallback active.");
+  }
+
+  function handleContextRestored() {
+    if (heroVisual) heroVisual.style.background = "";
+    canvas.style.visibility = "visible";
+    console.info("[AIM Hero] WebGL context restored.");
+    syncRendering();
+  }
+
+  canvas.addEventListener("webglcontextlost", handleContextLost, false);
+  canvas.addEventListener(
+    "webglcontextrestored",
+    handleContextRestored,
+    false,
+  );
 
   function handleVisibilityChange() {
     documentActive = !document.hidden;
@@ -911,6 +1255,11 @@ if (hero && canvas) {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     window.removeEventListener("focus", handleWindowFocus);
     window.removeEventListener("blur", handleWindowBlur);
+    canvas.removeEventListener("webglcontextlost", handleContextLost);
+    canvas.removeEventListener(
+      "webglcontextrestored",
+      handleContextRestored,
+    );
     window.removeEventListener("pagehide", disposeHero);
     if (
       developmentMode &&
@@ -942,4 +1291,5 @@ if (hero && canvas) {
   window.addEventListener("pagehide", disposeHero);
 
   syncRendering();
+  }
 }

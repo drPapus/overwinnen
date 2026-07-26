@@ -2017,6 +2017,9 @@ export class BlockSurfaceHuman {
     this.visualQuality = visualQuality;
     this.materialDebugMode = materialDebugMode;
     this.performanceProfiler = performanceProfiler;
+    this.visualRoot = new THREE.Group();
+    this.visualRoot.name = "BlockSurfaceHuman.VisualRoot";
+    this.scene?.add(this.visualRoot);
     this.pointerVisualActivity = 0;
     this.innerGlassMaterial = null;
     this.innerGlassBackMaterial = null;
@@ -2100,6 +2103,10 @@ export class BlockSurfaceHuman {
     this.simulationRunning = false;
     this.autoActivate = false;
     this.simulationInitialized = false;
+    this.particleSystemAvailable = false;
+    this.particleInitializationError = null;
+    this.simulationTextureType = THREE.FloatType;
+    this.simulationInternalFormat = "RGBA32F";
     this._previousViewport = new THREE.Vector4();
     this._previousScissor = new THREE.Vector4();
     this._previousClearColor = new THREE.Color();
@@ -2116,25 +2123,6 @@ export class BlockSurfaceHuman {
       );
     }
     if (this.loadPromise) return this.loadPromise;
-    if (!this.renderer?.capabilities.isWebGL2) {
-      return Promise.reject(
-        new Error("[BlockSurfaceHuman] Stage 2 requires WebGL2."),
-      );
-    }
-    if (!this.renderer.extensions.has("EXT_color_buffer_float")) {
-      return Promise.reject(
-        new Error(
-          "[BlockSurfaceHuman] Stage 3 requires float color render targets (EXT_color_buffer_float).",
-        ),
-      );
-    }
-    if (!this.renderer.extensions.has("OES_texture_float_linear")) {
-      return Promise.reject(
-        new Error(
-          "[BlockSurfaceHuman] Stage 4 requires linear filtering for float SDF textures (OES_texture_float_linear).",
-        ),
-      );
-    }
     if (
       this.orientationConfig.surfacePivot !== "center" &&
       this.orientationConfig.surfacePivot !== "innerFace"
@@ -2340,6 +2328,55 @@ export class BlockSurfaceHuman {
     return this.loadPromise;
   }
 
+  selectRenderableSimulationTarget() {
+    if (!this.renderer?.capabilities.isWebGL2) {
+      throw new Error("WebGL2 is unavailable.");
+    }
+    if (!this.renderer.extensions.has("OES_texture_float_linear")) {
+      throw new Error("OES_texture_float_linear is unavailable.");
+    }
+
+    const gl = this.renderer.getContext();
+    const candidates = [
+      { type: THREE.HalfFloatType, internalFormat: "RGBA16F" },
+      { type: THREE.FloatType, internalFormat: "RGBA32F" },
+    ];
+    const failures = [];
+    for (const candidate of candidates) {
+      const target = new THREE.WebGLRenderTarget(2, 2, {
+        format: THREE.RGBAFormat,
+        type: candidate.type,
+        internalFormat: candidate.internalFormat,
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
+        depthBuffer: false,
+        stencilBuffer: false,
+      });
+      target.texture.name =
+        `BlockSurfaceHuman.Probe.${candidate.internalFormat}`;
+      try {
+        this.withPreservedRendererState(() => {
+          this.renderer.setRenderTarget(target);
+          this.renderer.clear(true, false, false);
+          const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+          if (status !== gl.FRAMEBUFFER_COMPLETE) {
+            throw new Error(`framebuffer status 0x${status.toString(16)}`);
+          }
+        });
+        this.simulationTextureType = candidate.type;
+        this.simulationInternalFormat = candidate.internalFormat;
+        target.dispose();
+        return candidate;
+      } catch (error) {
+        failures.push(`${candidate.internalFormat}: ${error.message}`);
+        target.dispose();
+      }
+    }
+    throw new Error(
+      `No renderable simulation target (${failures.join("; ")}).`,
+    );
+  }
+
   createAimBlockMaterial() {
     const options = {
       color: new THREE.Color(this.visualConfig.baseColor),
@@ -2503,7 +2540,7 @@ export class BlockSurfaceHuman {
     }
 
     this.sourceRoot = sourceRoot;
-    this.scene.add(sourceRoot);
+    this.visualRoot.add(sourceRoot);
     this.prepareModel?.(sourceRoot);
     sourceRoot.updateMatrixWorld(true);
 
@@ -2521,12 +2558,17 @@ export class BlockSurfaceHuman {
       throw new Error("[BlockSurfaceHuman] No valid mesh surfaces were found.");
     }
 
-    allocateInstances(entries, this.particleCount);
     this.sourceMeshes = entries.map((entry) => entry.mesh);
     this.humanVisibleMeshes = [...this.sourceMeshes];
     this.humanRaycastMeshes = [...this.sourceMeshes];
     this.pointerRaycastMeshes = this.humanRaycastMeshes;
+    // Make the opaque core available before any optional GPU work.
+    this.configureInnerGlassMaterial();
     debugLog("[BlockSurfaceHuman] Valid meshes:", entries.length);
+
+    try {
+    this.selectRenderableSimulationTarget();
+    allocateInstances(entries, this.particleCount);
     entries.forEach(({ mesh, count }, index) => {
       debugLog(
         `[BlockSurfaceHuman] Mesh ${index + 1} (${mesh.name || "unnamed"}):`,
@@ -2671,10 +2713,10 @@ export class BlockSurfaceHuman {
       this.customDistanceMaterial;
 
     this.instancedMesh.instanceMatrix.needsUpdate = true;
-    this.scene.add(this.instancedMesh);
-    this.configureInnerGlassMaterial();
+    this.visualRoot.add(this.instancedMesh);
     this.setInteractionMode(this.interactionConfig.mode);
     this.initializeAutomaticInteraction();
+    this.particleSystemAvailable = true;
     debugLog("[BlockSurfaceHuman] Instances created:", instanceIndex);
     debugLog(
       "[BlockSurfaceHuman] Stage 8 pointer interaction initialized",
@@ -2722,6 +2764,15 @@ export class BlockSurfaceHuman {
       },
     );
     if (this.debugPositionTexture) this.logPositionTextureDiagnostics();
+    } catch (error) {
+      this.particleSystemAvailable = false;
+      this.particleInitializationError = error;
+      this.simulationInitialized = false;
+      this.simulationRunning = false;
+      if (this.instancedMesh) this.instancedMesh.visible = false;
+      console.error("[AIM Hero] Particle initialization failed", error);
+      debugLog("[AIM Hero] Metallic human fallback active.");
+    }
     return this;
   }
 
@@ -2998,7 +3049,8 @@ export class BlockSurfaceHuman {
       POSITION_TEXTURE_SIZE,
       {
         format: THREE.RGBAFormat,
-        type: THREE.FloatType,
+        type: this.simulationTextureType,
+        internalFormat: this.simulationInternalFormat,
         minFilter: THREE.NearestFilter,
         magFilter: THREE.NearestFilter,
         wrapS: THREE.ClampToEdgeWrapping,
@@ -3010,7 +3062,33 @@ export class BlockSurfaceHuman {
     );
     target.texture.generateMipmaps = false;
     target.texture.name = name;
+    this.validateRenderTarget(target);
     return this.performanceProfiler?.trackRenderTarget(target) || target;
+  }
+
+  validateRenderTarget(target) {
+    const gl = this.renderer.getContext();
+    this.withPreservedRendererState(() => {
+      this.renderer.setRenderTarget(target);
+      const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+      if (status !== gl.FRAMEBUFFER_COMPLETE) {
+        throw new Error(
+          `${target.texture.name} framebuffer incomplete: 0x${status.toString(16)}`,
+        );
+      }
+    });
+    debugLog("[AIM Hero] Render target validated", {
+      name: target.texture.name,
+      width: target.width,
+      height: target.height,
+      format: target.texture.format,
+      type: target.texture.type,
+      internalFormat: target.texture.internalFormat,
+      minFilter: target.texture.minFilter,
+      magFilter: target.texture.magFilter,
+      depthBuffer: target.depthBuffer,
+      stencilBuffer: target.stencilBuffer,
+    });
   }
 
   createPackedFloatTarget(width, height, name) {
@@ -3027,6 +3105,7 @@ export class BlockSurfaceHuman {
     });
     target.texture.generateMipmaps = false;
     target.texture.name = name;
+    this.validateRenderTarget(target);
     return this.performanceProfiler?.trackRenderTarget(target) || target;
   }
 
@@ -4221,7 +4300,7 @@ export class BlockSurfaceHuman {
       new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), origin, 0.12, 0xff6b8a),
     );
     this._autoInteractionDebugGroup = group;
-    this.scene.add(group);
+    this.visualRoot.add(group);
   }
 
   updateAutomaticDebugHelpers() {
@@ -4685,6 +4764,7 @@ export class BlockSurfaceHuman {
         height: target.height,
         format:
           target.texture.format === THREE.RGBAFormat ? "RGBA" : "other",
+        internalFormat: target.texture.internalFormat || null,
         type:
           target.texture.type === THREE.FloatType
             ? "Float32"
@@ -5284,6 +5364,13 @@ export class BlockSurfaceHuman {
     this.clearPointerInteraction();
     this.simulationRunning = true;
     this.autoActivate = autoActivate;
+  }
+
+  disableParticleSystem(error = null) {
+    this.particleSystemAvailable = false;
+    this.particleInitializationError = error || this.particleInitializationError;
+    this.simulationRunning = false;
+    if (this.instancedMesh) this.instancedMesh.visible = false;
   }
 
   pauseSimulation() {
@@ -6342,8 +6429,24 @@ gl_FragColor.rgb = ${pointerDebugColor};`,
 
   setRotationY(rotationY) {
     if (!Number.isFinite(rotationY)) return;
-    if (this.sourceRoot) this.sourceRoot.rotation.y = rotationY;
-    if (this.instancedMesh) this.instancedMesh.rotation.y = rotationY;
+    this.visualRoot.rotation.y = rotationY;
+  }
+
+  setVisualTransform({
+    scaleMultiplier = 1,
+    positionX = 0,
+    positionY = 0,
+  } = {}) {
+    if (
+      !Number.isFinite(scaleMultiplier) ||
+      !Number.isFinite(positionX) ||
+      !Number.isFinite(positionY)
+    ) {
+      return;
+    }
+    this.visualRoot.scale.setScalar(Math.max(scaleMultiplier, 0.001));
+    this.visualRoot.position.set(positionX, positionY, 0);
+    this.visualRoot.updateWorldMatrix(true, true);
   }
 
   setVisible(visible) {
@@ -6351,6 +6454,7 @@ gl_FragColor.rgb = ${pointerDebugColor};`,
     if (this.instancedMesh) {
       this.instancedMesh.visible =
         this.effectVisible &&
+        this.particleSystemAvailable &&
         this.innerCrystalDebugMode !== "crystal-only";
     }
     this.humanVisibleMeshes.forEach((mesh) => {
@@ -6443,10 +6547,12 @@ gl_FragColor.rgb = ${pointerDebugColor};`,
     this.customDistanceMaterial?.dispose();
     if (this.ownsMaterial) this.material?.dispose();
     if (this.sourceRoot) {
-      this.scene?.remove(this.sourceRoot);
+      this.visualRoot?.remove(this.sourceRoot);
       this.disposeSourceRoot(this.sourceRoot);
     }
     this.sourceRoot = null;
+    this.scene?.remove(this.visualRoot);
+    this.visualRoot = null;
     this.sourceMeshes = [];
     this.humanVisibleMeshes = [];
     this.humanRaycastMeshes = [];
