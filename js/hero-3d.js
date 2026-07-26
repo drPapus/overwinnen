@@ -18,12 +18,12 @@ import {
 const AIM_QUALITY_PRESETS = {
   high: {
     particleCount: 4096,
-    pixelRatioCap: 1.5,
+    pixelRatioCap: 1.25,
     // The approved effect already runs without particle-to-particle collisions.
     particleCollisions: false,
     collisionGrid: 64,
     collisionRebuildEvery: 1,
-    simulationSubsteps: 2,
+    simulationSubsteps: 1,
     scaleTexture: true,
     physicalMaterial: true,
     bloom: false,
@@ -125,6 +125,7 @@ function createHeroPipelineProfiler(renderer, enabled) {
   const sampleFrames = 120;
   const stageNames = [
     "pointerRaycast",
+    "automaticInteraction",
     "particleVelocity",
     "particlePosition",
     "externalCollision",
@@ -470,6 +471,8 @@ if (hero && canvas) {
   }
   if (renderer) {
   renderer.setClearColor(0x000000, 0);
+  renderer.setClearAlpha(0);
+  scene.background = null;
   const qualityName = selectAimQuality(renderer);
   const quality = AIM_QUALITY_PRESETS[qualityName];
   const developmentMode =
@@ -640,6 +643,16 @@ if (hero && canvas) {
 
   function loadModel() {
     const debugParameters = new URLSearchParams(window.location.search);
+    const requestedInteractionMode = debugParameters.get(
+      "aimInteraction",
+    );
+    const interactionMode =
+      developmentMode &&
+      ["automatic", "pointer", "off"].includes(requestedInteractionMode)
+        ? requestedInteractionMode
+        : "automatic";
+    canvas.style.pointerEvents =
+      interactionMode === "pointer" ? "auto" : "none";
     blockHuman = new BlockSurfaceHuman({
       scene,
       renderer,
@@ -663,7 +676,7 @@ if (hero && canvas) {
         mobileSimulationInterval: 1 / 30,
       },
       interaction: {
-        mode: "auto",
+        mode: interactionMode,
         automaticMobile: {
           enabled: true,
           segmentDurationMin: 2.2,
@@ -848,6 +861,46 @@ if (hero && canvas) {
       (currentScreenX - approvedScreenX) * worldUnitsPerPixel;
     camera.position.y -=
       (currentScreenY - approvedScreenY) * worldUnitsPerPixel;
+
+    // The old full-hero projection can sit partly outside the reduced visual
+    // region. Clamp the complete metallic-human bounds into the canvas while
+    // retaining a little room for particle motion.
+    const halfWidth = modelFrame.size.x * 0.5;
+    const halfDepth = modelFrame.size.z * 0.5;
+    const boundsCenterX = modelFrame.center.x;
+    const boundsCenterZ = modelFrame.center.z;
+    let projectedMinX = Infinity;
+    let projectedMaxX = -Infinity;
+    for (let xSide = -1; xSide <= 1; xSide += 2) {
+      for (let zSide = -1; zSide <= 1; zSide += 2) {
+        const pointX = boundsCenterX + halfWidth * xSide;
+        const pointZ = boundsCenterZ + halfDepth * zSide;
+        const pointDepth = Math.max(
+          0.001,
+          camera.position.z - pointZ,
+        );
+        const ndcX =
+          (pointX - camera.position.x) /
+          (pointDepth * tangent * camera.aspect);
+        const pixelX = (ndcX + 1) * visualRect.width * 0.5;
+        projectedMinX = Math.min(projectedMinX, pixelX);
+        projectedMaxX = Math.max(projectedMaxX, pixelX);
+      }
+    }
+    const horizontalPadding = 32;
+    if (projectedMinX < horizontalPadding) {
+      camera.position.x -=
+        (horizontalPadding - projectedMinX) * worldUnitsPerPixel;
+    } else if (
+      projectedMaxX >
+      visualRect.width - horizontalPadding
+    ) {
+      camera.position.x +=
+        (
+          projectedMaxX -
+          (visualRect.width - horizontalPadding)
+        ) * worldUnitsPerPixel;
+    }
   }
 
   function applyResponsiveSceneLayout(mode) {
@@ -859,8 +912,13 @@ if (hero && canvas) {
         positionY: preset.positionY,
       });
     }
-    studio.background.visible = mode === "desktop";
-    studio.cyclorama.visible = mode === "desktop";
+    // The opaque clip-space studio quad exposes the reduced canvas boundary.
+    // The DOM hero owns the background; WebGL stays transparent.
+    studio.background.visible = false;
+    // The opaque cyclorama also fills the reduced viewport on some GPUs,
+    // exposing the canvas as a black rectangle. Image-based lighting remains
+    // available through scene.environment.
+    studio.cyclorama.visible = false;
     if (mode === "desktop") {
       fitDesktopCameraToVisualRegion();
     } else if (
@@ -886,6 +944,9 @@ if (hero && canvas) {
   let frameTimeAverage = 0;
   let measuredFrameCount = 0;
   let lastMainRenderCalls = 0;
+  let mainRenderCount = 0;
+  const renderRateStartedAt = performance.now();
+  const mainRenderPreviousClearColor = new THREE.Color();
 
   function shouldRender() {
     const state = getRenderState();
@@ -909,6 +970,27 @@ if (hero && canvas) {
       contextAvailable: !renderer.getContext().isContextLost(),
       suspended: isDisposed || !windowFocused,
     };
+  }
+
+  function renderMainScene() {
+    renderer.getClearColor(mainRenderPreviousClearColor);
+    const previousClearAlpha = renderer.getClearAlpha();
+    const previousAutoClear = renderer.autoClear;
+    const previousRenderTarget = renderer.getRenderTarget();
+    try {
+      renderer.setRenderTarget(null);
+      renderer.setClearColor(0x000000, 0);
+      renderer.clear(true, true, true);
+      renderer.autoClear = false;
+      renderer.render(scene, camera);
+    } finally {
+      renderer.autoClear = previousAutoClear;
+      renderer.setClearColor(
+        mainRenderPreviousClearColor,
+        previousClearAlpha,
+      );
+      renderer.setRenderTarget(previousRenderTarget);
+    }
   }
 
   function animate(time) {
@@ -947,12 +1029,13 @@ if (hero && canvas) {
     }
     if (pipelineProfiler) {
       pipelineProfiler.measure("mainSceneRender", () => {
-        renderer.render(scene, camera);
+        renderMainScene();
       });
     } else {
-      renderer.render(scene, camera);
+      renderMainScene();
     }
     lastMainRenderCalls = renderer.info.render.calls;
+    mainRenderCount += 1;
     profilingFrame && pipelineProfiler.endFrame();
     animationFrameId = requestAnimationFrame(animate);
   }
@@ -1030,6 +1113,10 @@ if (hero && canvas) {
 
   function getPerformanceReport() {
     const particleReport = blockHuman?.getPerformanceReport() || null;
+    const renderRateSeconds = Math.max(
+      (performance.now() - renderRateStartedAt) / 1000,
+      0.001,
+    );
     return {
       quality: qualityName,
       renderCalls: lastMainRenderCalls || renderer.info.render.calls,
@@ -1055,6 +1142,10 @@ if (hero && canvas) {
         particleReport?.raycastTargetTriangles || 0,
       particleMaterial: particleReport?.particleMaterial || null,
       innerHumanMaterial: particleReport?.innerHumanMaterial || null,
+      interactionRates: particleReport?.interactionRates || null,
+      mainRendersPerSecond: Number(
+        (mainRenderCount / renderRateSeconds).toFixed(2),
+      ),
       pipelineProfile: pipelineProfiler?.getReport() || null,
     };
   }

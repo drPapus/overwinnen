@@ -1906,7 +1906,7 @@ export class BlockSurfaceHuman {
     this._collisionAbortController = null;
     this.pointerConfig = { ...DEFAULT_POINTER, ...pointer };
     this.interactionConfig = {
-      mode: interaction.mode || "auto",
+      mode: interaction.mode || "automatic",
       automaticMobile: {
         ...DEFAULT_AUTOMATIC_MOBILE_INTERACTION,
         ...(interaction.automaticMobile || {}),
@@ -2062,6 +2062,10 @@ export class BlockSurfaceHuman {
     this._particleCollisionFrame = 0;
     this._simulationPassesCurrentFrame = 0;
     this._simulationPassesLastFrame = 0;
+    this._interactionPerformanceStartedAt = performance.now();
+    this._automaticInteractionUpdateCount = 0;
+    this._pointerRaycastCount = 0;
+    this._simulationUpdateCount = 0;
     this.simulationAccumulator = 0;
     this._scaleSettleElapsed = 0;
     this._particleVoxelDataValid = false;
@@ -4051,16 +4055,16 @@ export class BlockSurfaceHuman {
   }
 
   resolveInteractionMode(mode = this.interactionConfig.mode) {
-    if (mode === "pointer" || mode === "automatic") return mode;
+    if (["pointer", "automatic", "off"].includes(mode)) return mode;
     const hasFinePointer = window.matchMedia("(pointer: fine)").matches;
     const hasHover = window.matchMedia("(hover: hover)").matches;
     return !hasFinePointer || !hasHover ? "automatic" : "pointer";
   }
 
   setInteractionMode(mode) {
-    if (!["auto", "pointer", "automatic"].includes(mode)) {
+    if (!["auto", "pointer", "automatic", "off"].includes(mode)) {
       throw new Error(
-        '[BlockSurfaceHuman] interaction mode must be "auto", "pointer", or "automatic".',
+        '[BlockSurfaceHuman] interaction mode must be "auto", "pointer", "automatic", or "off".',
       );
     }
     this.interactionConfig.mode = mode;
@@ -4635,7 +4639,10 @@ export class BlockSurfaceHuman {
       this.simulationAccumulator = 0;
     }
     if (automaticInteractionActive) {
-      this.updateAutomaticInteraction(safeDeltaTime);
+      this.measurePerformanceStage("automaticInteraction", () => {
+        this.updateAutomaticInteraction(safeDeltaTime);
+      });
+      this._automaticInteractionUpdateCount += 1;
     } else if (
       this.resolvedInteractionMode === "pointer" &&
       this.pointerNeedsRaycast
@@ -4643,6 +4650,7 @@ export class BlockSurfaceHuman {
       this.measurePerformanceStage("pointerRaycast", () => {
         this._updatePointerRaycast();
       });
+      this._pointerRaycastCount += 1;
     } else if (
       this.resolvedInteractionMode === "pointer" &&
       this.smoothedPointerVelocity.lengthSq() > 0
@@ -4709,6 +4717,7 @@ export class BlockSurfaceHuman {
           0
       );
     const substepDelta = safeDeltaTime / substepCount;
+    this._simulationUpdateCount += 1;
     this.withPreservedRendererState(() => {
       for (let substep = 0; substep < substepCount; substep += 1) {
         this.runSimulationStep(
@@ -4789,6 +4798,10 @@ export class BlockSurfaceHuman {
           (target.type === "Float32" ? 4 : 2),
       0,
     );
+    const measuredSeconds = Math.max(
+      (performance.now() - this._interactionPerformanceStartedAt) / 1000,
+      0.001,
+    );
     return {
       particleCount: this.particleCount,
       interactionMode: this.resolvedInteractionMode,
@@ -4806,6 +4819,20 @@ export class BlockSurfaceHuman {
       raycastTargetTriangles: Math.round(raycastTargetTriangles),
       particleMaterial: this.material?.type || null,
       innerHumanMaterial: this.innerGlassMaterial?.type || null,
+      interactionRates: {
+        measuredSeconds: Number(measuredSeconds.toFixed(2)),
+        raycasterCallsPerSecond: Number(
+          (this._pointerRaycastCount / measuredSeconds).toFixed(2),
+        ),
+        automaticInterpolationCallsPerSecond: Number(
+          (
+            this._automaticInteractionUpdateCount / measuredSeconds
+          ).toFixed(2),
+        ),
+        simulationUpdatesPerSecond: Number(
+          (this._simulationUpdateCount / measuredSeconds).toFixed(2),
+        ),
+      },
     };
   }
 
