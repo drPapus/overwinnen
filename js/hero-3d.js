@@ -6,7 +6,6 @@ import {
   disposeSphereReflectionEnvironment,
   updateSphereReflectionOnce,
 } from "../src/environment/sphereReflectionEnvironment.js";
-import { createBackgroundTitle } from "../src/objects/backgroundTitle.js";
 import {
   createContactShadowMaterial,
   createGlassSphereMaterial,
@@ -574,8 +573,6 @@ if (hero && canvas) {
   sphereGlassMaterial.envMap = sphereReflection.renderTarget.texture;
   sphereGlassMaterial.needsUpdate = true;
 
-  let backgroundTitle = null;
-  let titleLoadSettled = false;
   let sphereReflectionUpdated = false;
   let isDisposed = false;
   const initialHeroBounds = hero.getBoundingClientRect();
@@ -585,11 +582,10 @@ if (hero && canvas) {
   let windowFocused = true;
   const pausedHeroAnimations = new Set();
 
-  // Capture only after both asynchronous scene objects have their final position.
+  // Capture after the model reaches its final position.
   function finalizeSphereReflection() {
     if (
       !model ||
-      !titleLoadSettled ||
       sphereReflectionUpdated ||
       isDisposed ||
       !heroVisible ||
@@ -597,14 +593,6 @@ if (hero && canvas) {
       !windowFocused
     ) {
       return;
-    }
-
-    if (backgroundTitle) {
-      backgroundTitle.mesh.position.set(
-        glassSphereGroup.position.x  + 1.5,
-        glassSphereGroup.position.y + 0.4,
-        glassSphereGroup.position.z - 6,
-      );
     }
 
     scene.updateMatrixWorld(true);
@@ -616,25 +604,6 @@ if (hero && canvas) {
     );
     sphereReflectionUpdated = true;
   }
-
-  createBackgroundTitle(scene)
-    .then((title) => {
-      if (isDisposed) {
-        title.geometry.dispose();
-        title.material.dispose();
-        scene.remove(title.mesh);
-        return;
-      }
-
-      backgroundTitle = title;
-      titleLoadSettled = true;
-      finalizeSphereReflection();
-    })
-    .catch((error) => {
-      titleLoadSettled = true;
-      console.error("Failed to create the 3D background title.", error);
-      finalizeSphereReflection();
-    });
 
   const contactShadow = createContactShadow();
   const groundingEffects = new THREE.Group();
@@ -1362,10 +1331,6 @@ if (hero && canvas) {
     sphereGlassMaterial.dispose();
     sphereFresnelMaterial.dispose();
     disposeSphereReflectionEnvironment(sphereReflection);
-    if (backgroundTitle) {
-      backgroundTitle.geometry.dispose();
-      backgroundTitle.material.dispose();
-    }
     studio.cycloramaGeometry.dispose();
     studio.cycloramaMaterial.dispose();
     studio.backgroundGeometry.dispose();

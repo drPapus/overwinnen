@@ -452,6 +452,7 @@ a {
     height: min(820px, calc(100svh - 100px));
     overflow: hidden;
     background: transparent !important;
+    z-index: 2;
   }
 
   .hero-visual #hero-canvas {
@@ -466,6 +467,17 @@ a {
   .aim-card-stage {
     grid-column: 2;
     grid-row: 1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hero-layout .aim-card-position {
+    z-index: 1;
+  }
+
+  .hero-layout .aim-card-position--assessment {
+    top: 28%;
+    left: -4%;
   }
 }
 
@@ -635,7 +647,7 @@ a {
 
 .aim-card-position--assessment { top: 9%; left: -4%; }
 .aim-card-position--adaptation { top: 22%; right: -5%; }
-.aim-card-position--performance { bottom: -15%; left: -23%; }
+.aim-card-position--performance { bottom: -5%; left: -3%; }
 .aim-card-position--recovery { right: -2%; bottom: 8%; }
 
 .aim-card-float {
@@ -1337,7 +1349,7 @@ a {
 
   .aim-card-position--assessment { left: 1%; }
   .aim-card-position--adaptation { right: 0; }
-  .aim-card-position--performance { bottom: -10%; left: -15%; }
+  .aim-card-position--performance { bottom: 10%; left: -15%; }
   .aim-card-position--recovery { right: 2%; }
 }
 
