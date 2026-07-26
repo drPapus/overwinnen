@@ -62,7 +62,7 @@ const HERO_MODEL_PRESETS = {
     occupancy: null,
   },
   mobilePortrait: {
-    rootScaleMultiplier: 1,
+    rootScaleMultiplier: 1.11,
     positionX: 0,
     positionY: 0,
     cameraDistanceMultiplier: 1,
@@ -76,14 +76,14 @@ const HERO_MODEL_PRESETS = {
     occupancy: 0.74,
   },
   mobileLandscape: {
-    rootScaleMultiplier: 1,
+    rootScaleMultiplier: 1.22,
     positionX: 0,
     positionY: 0,
     cameraDistanceMultiplier: 1,
     occupancy: null,
   },
   tablet: {
-    rootScaleMultiplier: 1,
+    rootScaleMultiplier: 1.5,
     positionX: 0,
     positionY: 0,
     cameraDistanceMultiplier: 1,
